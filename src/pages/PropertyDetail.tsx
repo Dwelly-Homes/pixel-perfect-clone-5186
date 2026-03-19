@@ -1,0 +1,314 @@
+import { useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import {
+  ArrowLeft, MapPin, BadgeCheck, Shield, Heart, Share2,
+  Check, ChevronLeft, ChevronRight, X, Send, Eye, Calendar
+} from "lucide-react";
+import { MarketplaceNav } from "@/components/marketplace/MarketplaceNav";
+import { Footer } from "@/components/marketplace/Footer";
+import { InquiryModal } from "@/components/marketplace/InquiryModal";
+import { ViewingModal } from "@/components/marketplace/ViewingModal";
+import { PropertyCard } from "@/components/marketplace/PropertyCard";
+import { Badge } from "@/components/ui/badge";
+import { mockProperties } from "@/data/properties";
+
+export default function PropertyDetail() {
+  const { id } = useParams();
+  const property = mockProperties.find(p => p.id === id);
+  const [currentImage, setCurrentImage] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [inquiryOpen, setInquiryOpen] = useState(false);
+  const [viewingOpen, setViewingOpen] = useState(false);
+  const [favorited, setFavorited] = useState(false);
+
+  if (!property) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <MarketplaceNav />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="font-heading text-2xl font-bold text-foreground mb-2">Property not found</h2>
+            <Link to="/" className="text-secondary hover:underline font-body">← Back to marketplace</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const formattedPrice = new Intl.NumberFormat("en-KE").format(property.price);
+
+  const relatedProperties = mockProperties
+    .filter(p => p.id !== property.id && p.location.county === property.location.county)
+    .slice(0, 4);
+
+  const nextImage = () => setCurrentImage(i => (i + 1) % property.images.length);
+  const prevImage = () => setCurrentImage(i => (i - 1 + property.images.length) % property.images.length);
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <MarketplaceNav />
+
+      <div className="container mx-auto px-4 py-6 flex-1">
+        {/* Breadcrumb */}
+        <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground font-body mb-4">
+          <ArrowLeft className="h-4 w-4" /> Back to marketplace
+        </Link>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left column */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Image Gallery */}
+            <div className="relative rounded-xl overflow-hidden aspect-video bg-muted">
+              <img
+                src={property.images[currentImage]}
+                alt={property.title}
+                className="h-full w-full object-cover cursor-pointer"
+                onClick={() => setLightboxOpen(true)}
+              />
+              {property.images.length > 1 && (
+                <>
+                  <button onClick={prevImage} className="absolute left-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center hover:bg-card transition-colors">
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button onClick={nextImage} className="absolute right-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center hover:bg-card transition-colors">
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              )}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {property.images.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentImage(i)}
+                    className={`h-2 rounded-full transition-all ${i === currentImage ? "w-6 bg-secondary" : "w-2 bg-card/60"}`}
+                  />
+                ))}
+              </div>
+              {/* Badges */}
+              <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                {property.agent.earbLicensed && (
+                  <Badge className="bg-success text-success-foreground text-xs shadow-sm">
+                    <Shield className="mr-1 h-3 w-3" /> EARB Licensed
+                  </Badge>
+                )}
+                {property.agent.verified && (
+                  <Badge className="bg-info text-info-foreground text-xs shadow-sm">
+                    <BadgeCheck className="mr-1 h-3 w-3" /> Verified Agent
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Thumbnails */}
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {property.images.map((img, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentImage(i)}
+                  className={`shrink-0 h-16 w-24 rounded-md overflow-hidden border-2 transition-colors ${
+                    i === currentImage ? "border-secondary" : "border-transparent opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <img src={img} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+              <button
+                onClick={() => setLightboxOpen(true)}
+                className="shrink-0 h-16 w-24 rounded-md bg-muted flex items-center justify-center text-xs font-body text-muted-foreground hover:bg-muted/80"
+              >
+                <Eye className="h-4 w-4 mr-1" /> View All
+              </button>
+            </div>
+
+            {/* Title + Price */}
+            <div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h1 className="font-heading text-2xl md:text-3xl font-bold text-foreground">{property.title}</h1>
+                  <div className="flex items-center gap-1.5 mt-2 text-sm text-muted-foreground font-body">
+                    <MapPin className="h-4 w-4" />
+                    Kenya › {property.location.county} › {property.location.neighborhood}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setFavorited(!favorited)}
+                    className="h-10 w-10 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+                  >
+                    <Heart className={`h-5 w-5 ${favorited ? "fill-secondary text-secondary" : "text-muted-foreground"}`} />
+                  </button>
+                  <button className="h-10 w-10 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors">
+                    <Share2 className="h-5 w-5 text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-4">
+                <div className="font-heading text-3xl font-bold text-secondary">
+                  KES {formattedPrice}
+                  <span className="text-sm font-normal text-muted-foreground font-body"> / month</span>
+                </div>
+                <Badge variant="outline" className="font-body">{property.type}</Badge>
+                {property.bedrooms > 0 && (
+                  <Badge variant="outline" className="font-body">{property.bedrooms} Bedroom{property.bedrooms > 1 ? "s" : ""}</Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Description */}
+            <div>
+              <h2 className="font-heading text-lg font-semibold text-foreground mb-3">Description</h2>
+              <p className="text-sm text-muted-foreground font-body leading-relaxed">{property.description}</p>
+            </div>
+
+            {/* Amenities */}
+            <div>
+              <h2 className="font-heading text-lg font-semibold text-foreground mb-3">Features & Amenities</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {property.amenities.map(a => (
+                  <div key={a} className="flex items-center gap-2 text-sm font-body text-foreground">
+                    <Check className="h-4 w-4 text-success shrink-0" />
+                    {a}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Map Placeholder */}
+            <div>
+              <h2 className="font-heading text-lg font-semibold text-foreground mb-3">Location</h2>
+              <div className="rounded-xl bg-muted h-64 flex items-center justify-center text-muted-foreground font-body text-sm">
+                <MapPin className="h-6 w-6 mr-2" /> Map integration — {property.location.neighborhood}, {property.location.county}
+              </div>
+            </div>
+          </div>
+
+          {/* Right column — Agent + Contact */}
+          <div className="space-y-4">
+            <div className="sticky top-20 space-y-4">
+              {/* Agent Card */}
+              <div className="rounded-xl border border-border bg-card p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg">
+                    {property.agent.name.charAt(0)}
+                  </div>
+                  <div>
+                    <Link to={`/marketplace/agents/${property.agent.slug}`} className="font-heading font-semibold text-foreground hover:text-secondary transition-colors">
+                      {property.agent.agency}
+                    </Link>
+                    <p className="text-xs text-muted-foreground font-body">{property.agent.name}</p>
+                  </div>
+                </div>
+                <div className="space-y-2 mb-4">
+                  {property.agent.verified && (
+                    <div className="flex items-center gap-2 text-xs font-body text-muted-foreground">
+                      <BadgeCheck className="h-4 w-4 text-info" /> Verified Agent
+                    </div>
+                  )}
+                  {property.agent.earbLicensed && (
+                    <div className="flex items-center gap-2 text-xs font-body text-muted-foreground">
+                      <Shield className="h-4 w-4 text-success" /> EARB Licensed
+                    </div>
+                  )}
+                  <div className="text-xs font-body text-muted-foreground">
+                    Member since {property.agent.memberSince}
+                  </div>
+                  <div className="text-xs font-body text-muted-foreground">
+                    Responds within {property.agent.responseRate}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setInquiryOpen(true)}
+                    className="w-full flex items-center justify-center gap-2 rounded-md bg-secondary py-2.5 text-sm font-body font-medium text-secondary-foreground hover:bg-orange-dark transition-colors"
+                  >
+                    <Send className="h-4 w-4" /> Send Inquiry
+                  </button>
+                  <button
+                    onClick={() => setViewingOpen(true)}
+                    className="w-full flex items-center justify-center gap-2 rounded-md border border-primary py-2.5 text-sm font-body font-medium text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+                  >
+                    <Calendar className="h-4 w-4" /> Request Viewing
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Stats */}
+              <div className="rounded-xl border border-border bg-card p-5 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground font-body">Type</p>
+                  <p className="text-sm font-medium text-foreground font-body">{property.type}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-body">Bedrooms</p>
+                  <p className="text-sm font-medium text-foreground font-body">{property.bedrooms === 0 ? "Studio" : property.bedrooms}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-body">County</p>
+                  <p className="text-sm font-medium text-foreground font-body">{property.location.county}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-body">Status</p>
+                  <Badge className="bg-success text-success-foreground text-xs mt-0.5">Available</Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Related Listings */}
+        {relatedProperties.length > 0 && (
+          <div className="mt-12">
+            <h2 className="font-heading text-xl font-semibold text-foreground mb-6">
+              More properties in {property.location.neighborhood}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {relatedProperties.map(p => (
+                <PropertyCard key={p.id} property={p} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <Footer />
+
+      {/* Lightbox */}
+      {lightboxOpen && (
+        <div className="fixed inset-0 z-50 bg-foreground/90 flex items-center justify-center" onClick={() => setLightboxOpen(false)}>
+          <button className="absolute top-4 right-4 text-primary-foreground/80 hover:text-primary-foreground" onClick={() => setLightboxOpen(false)}>
+            <X className="h-8 w-8" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-4 text-primary-foreground/80 hover:text-primary-foreground">
+            <ChevronLeft className="h-10 w-10" />
+          </button>
+          <img
+            src={property.images[currentImage]}
+            alt={property.title}
+            className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg"
+            onClick={e => e.stopPropagation()}
+          />
+          <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-4 text-primary-foreground/80 hover:text-primary-foreground">
+            <ChevronRight className="h-10 w-10" />
+          </button>
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-primary-foreground/60 text-sm font-body">
+            {currentImage + 1} / {property.images.length}
+          </div>
+        </div>
+      )}
+
+      <InquiryModal
+        open={inquiryOpen}
+        onClose={() => setInquiryOpen(false)}
+        propertyTitle={property.title}
+        agentName={property.agent.name}
+      />
+      <ViewingModal
+        open={viewingOpen}
+        onClose={() => setViewingOpen(false)}
+        propertyTitle={property.title}
+      />
+    </div>
+  );
+}
