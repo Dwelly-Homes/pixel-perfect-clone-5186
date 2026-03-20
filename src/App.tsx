@@ -11,6 +11,10 @@ import VerifyOTP from "./pages/VerifyOTP.tsx";
 import ForgotPassword from "./pages/ForgotPassword.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import { DashboardLayout } from "./components/dashboard/DashboardLayout.tsx";
+import DashboardHome from "./pages/dashboard/DashboardHome.tsx";
+import PropertyList from "./pages/dashboard/PropertyList.tsx";
+import PropertyForm from "./pages/dashboard/PropertyForm.tsx";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +32,12 @@ const App = () => (
           <Route path="/verify-otp" element={<VerifyOTP />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/dashboard" element={<DashboardLayout />}>
+            <Route index element={<DashboardHome />} />
+            <Route path="properties" element={<PropertyList />} />
+            <Route path="properties/new" element={<PropertyForm />} />
+            <Route path="properties/:id/edit" element={<PropertyForm />} />
+          </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
