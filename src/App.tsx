@@ -15,6 +15,8 @@ import { DashboardLayout } from "./components/dashboard/DashboardLayout.tsx";
 import DashboardHome from "./pages/dashboard/DashboardHome.tsx";
 import PropertyList from "./pages/dashboard/PropertyList.tsx";
 import PropertyForm from "./pages/dashboard/PropertyForm.tsx";
+import TenantOnboarding from "./pages/tenant/TenantOnboarding.tsx";
+import TenantDashboard from "./pages/tenant/TenantDashboard.tsx";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +34,8 @@ const App = () => (
           <Route path="/verify-otp" element={<VerifyOTP />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/tenant" element={<TenantDashboard />} />
+          <Route path="/tenant/onboarding" element={<TenantOnboarding />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="properties" element={<PropertyList />} />
