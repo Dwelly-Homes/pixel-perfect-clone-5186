@@ -17,6 +17,8 @@ import PropertyList from "./pages/dashboard/PropertyList.tsx";
 import PropertyForm from "./pages/dashboard/PropertyForm.tsx";
 import TenantOnboarding from "./pages/tenant/TenantOnboarding.tsx";
 import TenantDashboard from "./pages/tenant/TenantDashboard.tsx";
+import LandlordOnboarding from "./pages/landlord/LandlordOnboarding.tsx";
+import LandlordDashboard from "./pages/landlord/LandlordDashboard.tsx";
 
 const queryClient = new QueryClient();
 
