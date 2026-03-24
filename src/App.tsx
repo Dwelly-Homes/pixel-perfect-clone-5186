@@ -11,10 +11,24 @@ import VerifyOTP from "./pages/VerifyOTP.tsx";
 import ForgotPassword from "./pages/ForgotPassword.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import InviteAccept from "./pages/InviteAccept.tsx";
+import AgentProfile from "./pages/marketplace/AgentProfile.tsx";
 import { DashboardLayout } from "./components/dashboard/DashboardLayout.tsx";
 import DashboardHome from "./pages/dashboard/DashboardHome.tsx";
 import PropertyList from "./pages/dashboard/PropertyList.tsx";
 import PropertyForm from "./pages/dashboard/PropertyForm.tsx";
+import PropertyMedia from "./pages/dashboard/PropertyMedia.tsx";
+import TeamMembers from "./pages/dashboard/TeamMembers.tsx";
+import InviteMember from "./pages/dashboard/InviteMember.tsx";
+import Inquiries from "./pages/dashboard/Inquiries.tsx";
+import Viewings from "./pages/dashboard/Viewings.tsx";
+import Notifications from "./pages/dashboard/Notifications.tsx";
+import Verification from "./pages/dashboard/Verification.tsx";
+import Commissions from "./pages/dashboard/Commissions.tsx";
+import Billing from "./pages/dashboard/Billing.tsx";
+import BillingPlans from "./pages/dashboard/BillingPlans.tsx";
+import BillingHistory from "./pages/dashboard/BillingHistory.tsx";
+import OrganizationSettings from "./pages/dashboard/OrganizationSettings.tsx";
 import TenantOnboarding from "./pages/tenant/TenantOnboarding.tsx";
 import TenantDashboard from "./pages/tenant/TenantDashboard.tsx";
 import LandlordOnboarding from "./pages/landlord/LandlordOnboarding.tsx";
@@ -22,6 +36,14 @@ import LandlordDashboard from "./pages/landlord/LandlordDashboard.tsx";
 import TenantBookings from "./pages/tenant/TenantBookings.tsx";
 import TenantPayments from "./pages/tenant/TenantPayments.tsx";
 import LandlordInquiries from "./pages/landlord/LandlordInquiries.tsx";
+import { AdminLayout } from "./components/admin/AdminLayout.tsx";
+import AdminDashboard from "./pages/admin/AdminDashboard.tsx";
+import AdminVerifications from "./pages/admin/AdminVerifications.tsx";
+import AdminVerificationReview from "./pages/admin/AdminVerificationReview.tsx";
+import AdminTenants from "./pages/admin/AdminTenants.tsx";
+import AdminTenantDetail from "./pages/admin/AdminTenantDetail.tsx";
+import AdminEarbTracker from "./pages/admin/AdminEarbTracker.tsx";
+import AdminAuditLog from "./pages/admin/AdminAuditLog.tsx";
 
 const queryClient = new QueryClient();
 
@@ -34,11 +56,13 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/marketplace/:id" element={<PropertyDetail />} />
+          <Route path="/marketplace/agents/:slug" element={<AgentProfile />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-otp" element={<VerifyOTP />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/invite/:token" element={<InviteAccept />} />
           <Route path="/tenant" element={<TenantDashboard />} />
           <Route path="/tenant/onboarding" element={<TenantOnboarding />} />
           <Route path="/tenant/bookings" element={<TenantBookings />} />
@@ -51,6 +75,27 @@ const App = () => (
             <Route path="properties" element={<PropertyList />} />
             <Route path="properties/new" element={<PropertyForm />} />
             <Route path="properties/:id/edit" element={<PropertyForm />} />
+            <Route path="properties/:id/media" element={<PropertyMedia />} />
+            <Route path="team" element={<TeamMembers />} />
+            <Route path="team/invite" element={<InviteMember />} />
+            <Route path="inquiries" element={<Inquiries />} />
+            <Route path="viewings" element={<Viewings />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="verification" element={<Verification />} />
+            <Route path="commissions" element={<Commissions />} />
+            <Route path="billing" element={<Billing />} />
+            <Route path="billing/plans" element={<BillingPlans />} />
+            <Route path="billing/history" element={<BillingHistory />} />
+            <Route path="settings/organization" element={<OrganizationSettings />} />
+          </Route>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="verifications" element={<AdminVerifications />} />
+            <Route path="verifications/:id" element={<AdminVerificationReview />} />
+            <Route path="tenants" element={<AdminTenants />} />
+            <Route path="tenants/:id" element={<AdminTenantDetail />} />
+            <Route path="earb" element={<AdminEarbTracker />} />
+            <Route path="audit" element={<AdminAuditLog />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

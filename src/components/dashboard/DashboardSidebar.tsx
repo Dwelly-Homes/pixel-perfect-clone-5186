@@ -9,6 +9,12 @@ import {
   Settings,
   LogOut,
   ChevronLeft,
+  Calendar,
+  ShieldCheck,
+  CreditCard,
+  DollarSign,
+  Building,
+  UserPlus,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -32,12 +38,20 @@ const mainNav = [
   { title: "My Properties", url: "/dashboard/properties", icon: Building2 },
   { title: "Add Property", url: "/dashboard/properties/new", icon: Plus },
   { title: "Inquiries", url: "/dashboard/inquiries", icon: MessageSquare },
+  { title: "Viewings", url: "/dashboard/viewings", icon: Calendar },
   { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
 ];
 
 const manageNav = [
-  { title: "Tenants", url: "/dashboard/tenants", icon: Users },
+  { title: "Team", url: "/dashboard/team", icon: Users },
+  { title: "Commissions", url: "/dashboard/commissions", icon: DollarSign },
+  { title: "Verification", url: "/dashboard/verification", icon: ShieldCheck },
+  { title: "Billing", url: "/dashboard/billing", icon: CreditCard },
   { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3 },
+];
+
+const settingsNav = [
+  { title: "Organization", url: "/dashboard/settings/organization", icon: Building },
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ];
 
@@ -101,6 +115,30 @@ export function DashboardSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {manageNav.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Settings</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {settingsNav.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
