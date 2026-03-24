@@ -29,12 +29,17 @@ import Billing from "./pages/dashboard/Billing.tsx";
 import BillingPlans from "./pages/dashboard/BillingPlans.tsx";
 import BillingHistory from "./pages/dashboard/BillingHistory.tsx";
 import OrganizationSettings from "./pages/dashboard/OrganizationSettings.tsx";
+import TenantLayout from "./components/tenant/TenantLayout.tsx";
 import TenantOnboarding from "./pages/tenant/TenantOnboarding.tsx";
 import TenantDashboard from "./pages/tenant/TenantDashboard.tsx";
-import LandlordOnboarding from "./pages/landlord/LandlordOnboarding.tsx";
-import LandlordDashboard from "./pages/landlord/LandlordDashboard.tsx";
 import TenantBookings from "./pages/tenant/TenantBookings.tsx";
 import TenantPayments from "./pages/tenant/TenantPayments.tsx";
+import TenantSaved from "./pages/tenant/TenantSaved.tsx";
+import TenantMessages from "./pages/tenant/TenantMessages.tsx";
+import TenantNotifications from "./pages/tenant/TenantNotifications.tsx";
+import TenantProfile from "./pages/tenant/TenantProfile.tsx";
+import LandlordOnboarding from "./pages/landlord/LandlordOnboarding.tsx";
+import LandlordDashboard from "./pages/landlord/LandlordDashboard.tsx";
 import LandlordInquiries from "./pages/landlord/LandlordInquiries.tsx";
 import { AdminLayout } from "./components/admin/AdminLayout.tsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.tsx";
@@ -69,10 +74,16 @@ const App = () => (
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/invite/:token" element={<InviteAccept />} />
-          <Route path="/tenant" element={<TenantDashboard />} />
+          <Route path="/tenant" element={<TenantLayout />}>
+            <Route index element={<TenantDashboard />} />
+            <Route path="bookings" element={<TenantBookings />} />
+            <Route path="payments" element={<TenantPayments />} />
+            <Route path="saved" element={<TenantSaved />} />
+            <Route path="messages" element={<TenantMessages />} />
+            <Route path="notifications" element={<TenantNotifications />} />
+            <Route path="profile" element={<TenantProfile />} />
+          </Route>
           <Route path="/tenant/onboarding" element={<TenantOnboarding />} />
-          <Route path="/tenant/bookings" element={<TenantBookings />} />
-          <Route path="/tenant/payments" element={<TenantPayments />} />
           <Route path="/landlord" element={<LandlordDashboard />} />
           <Route path="/landlord/onboarding" element={<LandlordOnboarding />} />
           <Route path="/landlord/inquiries" element={<LandlordInquiries />} />
