@@ -19,6 +19,8 @@ import TenantOnboarding from "./pages/tenant/TenantOnboarding.tsx";
 import TenantDashboard from "./pages/tenant/TenantDashboard.tsx";
 import LandlordOnboarding from "./pages/landlord/LandlordOnboarding.tsx";
 import LandlordDashboard from "./pages/landlord/LandlordDashboard.tsx";
+import TenantBookings from "./pages/tenant/TenantBookings.tsx";
+import LandlordInquiries from "./pages/landlord/LandlordInquiries.tsx";
 
 const queryClient = new QueryClient();
 
