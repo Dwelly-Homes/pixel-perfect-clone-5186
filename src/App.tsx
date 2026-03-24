@@ -42,6 +42,7 @@ const App = () => (
           <Route path="/tenant" element={<TenantDashboard />} />
           <Route path="/tenant/onboarding" element={<TenantOnboarding />} />
           <Route path="/tenant/bookings" element={<TenantBookings />} />
+          <Route path="/tenant/payments" element={<TenantPayments />} />
           <Route path="/landlord" element={<LandlordDashboard />} />
           <Route path="/landlord/onboarding" element={<LandlordOnboarding />} />
           <Route path="/landlord/inquiries" element={<LandlordInquiries />} />
