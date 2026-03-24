@@ -44,6 +44,12 @@ import AdminTenants from "./pages/admin/AdminTenants.tsx";
 import AdminTenantDetail from "./pages/admin/AdminTenantDetail.tsx";
 import AdminEarbTracker from "./pages/admin/AdminEarbTracker.tsx";
 import AdminAuditLog from "./pages/admin/AdminAuditLog.tsx";
+import AdminAgents from "./pages/admin/AdminAgents.tsx";
+import AdminAgentDetail from "./pages/admin/AdminAgentDetail.tsx";
+import AdminLandlords from "./pages/admin/AdminLandlords.tsx";
+import AdminLandlordDetail from "./pages/admin/AdminLandlordDetail.tsx";
+import AdminProperties from "./pages/admin/AdminProperties.tsx";
+import AdminBilling from "./pages/admin/AdminBilling.tsx";
 
 const queryClient = new QueryClient();
 
@@ -96,6 +102,12 @@ const App = () => (
             <Route path="tenants/:id" element={<AdminTenantDetail />} />
             <Route path="earb" element={<AdminEarbTracker />} />
             <Route path="audit" element={<AdminAuditLog />} />
+            <Route path="agents" element={<AdminAgents />} />
+            <Route path="agents/:id" element={<AdminAgentDetail />} />
+            <Route path="landlords" element={<AdminLandlords />} />
+            <Route path="landlords/:id" element={<AdminLandlordDetail />} />
+            <Route path="properties" element={<AdminProperties />} />
+            <Route path="billing" element={<AdminBilling />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
