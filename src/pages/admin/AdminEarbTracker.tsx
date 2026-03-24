@@ -1,36 +1,15 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-interface EarbAgent {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  earbNumber: string;
-  expiryDate: string;
-  lastRenewed: string;
-  listingsCount: number;
-}
-
-const AGENTS: EarbAgent[] = [
-  { id: "1", name: "Prestige Properties Ltd", email: "info@prestige.co.ke", phone: "+254 712 345 678", earbNumber: "EARB/2021/0042", expiryDate: "2024-07-15", lastRenewed: "2023-07-15", listingsCount: 12 },
-  { id: "2", name: "KeyHomes Agency", email: "admin@keyhomes.co.ke", phone: "+254 722 456 789", earbNumber: "EARB/2020/0117", expiryDate: "2024-06-30", lastRenewed: "2023-06-30", listingsCount: 8 },
-  { id: "3", name: "Nairobi Realty Ltd", email: "info@nairobi-realty.co.ke", phone: "+254 733 567 890", earbNumber: "EARB/2019/0203", expiryDate: "2024-08-01", lastRenewed: "2023-08-01", listingsCount: 22 },
-  { id: "4", name: "TopFlat Agency", email: "info@topflat.co.ke", phone: "+254 700 678 901", earbNumber: "EARB/2022/0055", expiryDate: "2024-05-31", lastRenewed: "2023-05-31", listingsCount: 5 },
-  { id: "5", name: "FastLet Ltd", email: "admin@fastlet.co.ke", phone: "+254 711 789 012", earbNumber: "EARB/2021/0089", expiryDate: "2024-04-15", lastRenewed: "2023-04-15", listingsCount: 0 },
-  { id: "6", name: "Homes Kenya Ltd", email: "info@homeskenya.co.ke", phone: "+254 723 890 123", earbNumber: "EARB/2020/0156", expiryDate: "2024-12-31", lastRenewed: "2023-12-31", listingsCount: 18 },
-  { id: "7", name: "PrimeSpace Agency", email: "admin@primespace.co.ke", phone: "+254 700 901 234", earbNumber: "EARB/2022/0071", expiryDate: "2024-11-30", lastRenewed: "2023-11-30", listingsCount: 9 },
-];
-
-const TODAY = new Date("2024-06-21");
+import { api, getApiError } from "@/lib/api";
 
 function getDaysUntilExpiry(dateStr: string): number {
-  return Math.ceil((new Date(dateStr).getTime() - TODAY.getTime()) / 86400000);
+  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
 }
 
 function getExpiryStatus(days: number): { label: string; color: string; bg: string; icon: React.ElementType } {
@@ -44,17 +23,51 @@ function getExpiryStatus(days: number): { label: string; color: string; bg: stri
 const TABS = ["All", "Expired", "Expiring Soon", "Valid"] as const;
 
 export default function AdminEarbTracker() {
-  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<typeof TABS[number]>("All");
   const [search, setSearch] = useState("");
 
-  const withDays = AGENTS.map((a) => ({ ...a, days: getDaysUntilExpiry(a.expiryDate) }));
+  const { data, isLoading } = useQuery({
+    queryKey: ["earbTracker"],
+    queryFn: async () => {
+      const { data } = await api.get("/admin/earb-tracker");
+      return data.data || [];
+    },
+  });
+
+  const sendRemindersMutation = useMutation({
+    mutationFn: () => api.post("/admin/earb/send-reminders"),
+    onSuccess: () => {
+      toast.success("Renewal reminders sent to all expiring agents");
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  const markRenewedMutation = useMutation({
+    mutationFn: (tenantId: string) => api.patch(`/admin/earb/${tenantId}/renew`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["earbTracker"] });
+      toast.success("EARB certificate marked as renewed");
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const agents: any[] = data || [];
+
+  const withDays = agents.map((a) => ({
+    ...a,
+    days: a.earbExpiryDate ? getDaysUntilExpiry(a.earbExpiryDate) : 999,
+  }));
 
   const filtered = withDays.filter((a) => {
     if (tab === "Expired" && a.days >= 0) return false;
     if (tab === "Expiring Soon" && (a.days < 0 || a.days > 30)) return false;
     if (tab === "Valid" && a.days <= 30) return false;
-    if (search && !a.name.toLowerCase().includes(search.toLowerCase()) && !a.earbNumber.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!a.businessName?.toLowerCase().includes(q) && !a.earbNumber?.toLowerCase().includes(q)) return false;
+    }
     return true;
   });
 
@@ -63,12 +76,16 @@ export default function AdminEarbTracker() {
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
-      <div>
-        <h1 className="text-2xl font-heading font-bold">EARB Tracker</h1>
-        <p className="text-sm text-muted-foreground mt-1">Monitor Estate Agents Registration Board certificate expiry dates.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-heading font-bold">EARB Tracker</h1>
+          <p className="text-sm text-muted-foreground mt-1">Monitor Estate Agents Registration Board certificate expiry dates.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => sendRemindersMutation.mutate()} disabled={sendRemindersMutation.isPending}>
+          <RefreshCw className="h-4 w-4 mr-1.5" />Send All Reminders
+        </Button>
       </div>
 
-      {/* Summary */}
       {(expired > 0 || expiringSoon > 0) && (
         <div className="flex gap-4 flex-wrap">
           {expired > 0 && (
@@ -92,7 +109,6 @@ export default function AdminEarbTracker() {
         </div>
       )}
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1.5">
           {TABS.map((t) => (
@@ -115,43 +131,56 @@ export default function AdminEarbTracker() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
-                {["Agency", "EARB Number", "Email", "Expiry Date", "Status", "Listings", ""].map((h) => (
+                {["Agency", "EARB Number", "Email", "Expiry Date", "Status", ""].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a) => {
-                const es = getExpiryStatus(a.days);
-                const StatusIcon = es.icon;
-                return (
-                  <tr key={a.id} className="border-b last:border-0 hover:bg-muted/20">
-                    <td className="px-4 py-3">
-                      <p className="text-xs font-medium">{a.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{a.phone}</p>
-                    </td>
-                    <td className="px-4 py-3 text-xs font-mono text-muted-foreground">{a.earbNumber}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{a.email}</td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap">
-                      {new Date(a.expiryDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit", es.bg, es.color)}>
-                        <StatusIcon className="h-3 w-3" />{es.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-center">{a.listingsCount}</td>
-                    <td className="px-4 py-3">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast({ title: "Reminder sent", description: `Renewal reminder sent to ${a.name}` })}>
-                        <RefreshCw className="h-3 w-3 mr-1" />Send Reminder
-                      </Button>
-                    </td>
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b">
+                    <td colSpan={6} className="px-4 py-3"><div className="h-4 bg-muted rounded animate-pulse" /></td>
                   </tr>
-                );
-              })}
+                ))
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">No agents found.</td></tr>
+              ) : (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                filtered.map((a: any) => {
+                  const es = getExpiryStatus(a.days);
+                  const StatusIcon = es.icon;
+                  return (
+                    <tr key={a._id} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-4 py-3">
+                        <p className="text-xs font-medium">{a.businessName || "—"}</p>
+                        <p className="text-[10px] text-muted-foreground">{a.contactPhone || "—"}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs font-mono text-muted-foreground">{a.earbNumber || "—"}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{a.contactEmail || "—"}</td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        {a.earbExpiryDate
+                          ? new Date(a.earbExpiryDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit", es.bg, es.color)}>
+                          <StatusIcon className="h-3 w-3" />{es.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs"
+                          onClick={() => markRenewedMutation.mutate(a._id)}
+                          disabled={markRenewedMutation.isPending}>
+                          <RefreshCw className="h-3 w-3 mr-1" />Mark Renewed
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-          {filtered.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No agents found.</p>}
         </CardContent>
       </Card>
     </div>

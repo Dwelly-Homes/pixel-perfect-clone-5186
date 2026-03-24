@@ -1,78 +1,77 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, Eye, UserX, UserCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { api, getApiError } from "@/lib/api";
 
-type LandlordStatus = "Active" | "Suspended" | "Pending";
+const TABS = ["All", "active", "suspended", "pending_verification"] as const;
+const TAB_LABELS: Record<string, string> = {
+  All: "All",
+  active: "Active",
+  suspended: "Suspended",
+  pending_verification: "Pending",
+};
 
-interface Landlord {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  idNumber: string;
-  listings: number;
-  occupiedListings: number;
-  joinedOn: string;
-  status: LandlordStatus;
-  plan: "Starter" | "Professional";
-  totalRevenue: number;
-}
-
-const LANDLORDS: Landlord[] = [
-  { id: "1", name: "Grace Wambui", email: "grace.w@gmail.com", phone: "+254 712 100 200", idNumber: "12345678", listings: 3, occupiedListings: 3, joinedOn: "2023-01-15", status: "Active", plan: "Starter", totalRevenue: 27000 },
-  { id: "2", name: "James Kariuki", email: "james.k@gmail.com", phone: "+254 722 300 400", idNumber: "23456789", listings: 8, occupiedListings: 6, joinedOn: "2022-06-10", status: "Active", plan: "Professional", totalRevenue: 94500 },
-  { id: "3", name: "Sarah Mutua", email: "sarah.m@yahoo.com", phone: "+254 733 500 600", idNumber: "34567890", listings: 5, occupiedListings: 4, joinedOn: "2023-03-20", status: "Active", plan: "Starter", totalRevenue: 45000 },
-  { id: "4", name: "Peter Njuguna", email: "peter.n@gmail.com", phone: "+254 700 700 800", idNumber: "45678901", listings: 2, occupiedListings: 0, joinedOn: "2024-01-05", status: "Pending", plan: "Starter", totalRevenue: 0 },
-  { id: "5", name: "Mary Achieng", email: "mary.a@gmail.com", phone: "+254 711 900 000", idNumber: "56789012", listings: 4, occupiedListings: 2, joinedOn: "2022-11-12", status: "Suspended", plan: "Starter", totalRevenue: 18000 },
-  { id: "6", name: "John Kimani", email: "john.k@gmail.com", phone: "+254 723 111 222", idNumber: "67890123", listings: 12, occupiedListings: 10, joinedOn: "2021-09-01", status: "Active", plan: "Professional", totalRevenue: 162000 },
-];
-
-const TABS = ["All", "Active", "Suspended", "Pending"] as const;
-
-const statusColors: Record<LandlordStatus, string> = {
-  Active: "bg-green-100 text-green-700",
-  Suspended: "bg-red-100 text-red-700",
-  Pending: "bg-amber-100 text-amber-700",
+const statusColors: Record<string, string> = {
+  active: "bg-green-100 text-green-700",
+  suspended: "bg-red-100 text-red-700",
+  pending_verification: "bg-amber-100 text-amber-700",
+  inactive: "bg-gray-100 text-gray-600",
 };
 
 export default function AdminLandlords() {
-  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<typeof TABS[number]>("All");
   const [search, setSearch] = useState("");
 
-  const filtered = LANDLORDS.filter((l) => {
-    if (tab !== "All" && l.status !== tab) return false;
-    const q = search.toLowerCase();
-    if (q && !l.name.toLowerCase().includes(q) && !l.email.toLowerCase().includes(q)) return false;
-    return true;
+  const { data, isLoading } = useQuery({
+    queryKey: ["adminLandlords", tab],
+    queryFn: async () => {
+      const params = new URLSearchParams({ accountType: "landlord", limit: "50" });
+      if (tab !== "All") params.set("status", tab);
+      if (search) params.set("search", search);
+      const { data } = await api.get(`/tenants?${params.toString()}`);
+      return data;
+    },
   });
 
-  const totals = {
-    active: LANDLORDS.filter((l) => l.status === "Active").length,
-    listings: LANDLORDS.reduce((s, l) => s + l.listings, 0),
-    occupied: LANDLORDS.reduce((s, l) => s + l.occupiedListings, 0),
-    revenue: LANDLORDS.reduce((s, l) => s + l.totalRevenue, 0),
-  };
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      api.patch(`/tenants/${id}/status`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["adminLandlords"] });
+      toast.success("Status updated");
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const landlords: any[] = data?.data || [];
+  const total = data?.pagination?.total ?? 0;
+
+  const filtered = landlords.filter((l) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return l.businessName?.toLowerCase().includes(q) || l.contactEmail?.toLowerCase().includes(q);
+  });
 
   return (
     <div className="p-6 space-y-6 max-w-6xl">
       <div>
         <h1 className="text-2xl font-heading font-bold">Landlords</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage all registered individual landlords on the platform.</p>
+        <p className="text-sm text-muted-foreground mt-1">Manage all registered landlords on the platform.</p>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {[
-          { label: "Active Landlords", value: totals.active },
-          { label: "Total Listings", value: totals.listings },
-          { label: "Occupied", value: `${totals.occupied} / ${totals.listings}` },
-          { label: "Total Revenue", value: `KES ${totals.revenue.toLocaleString()}` },
+          { label: "Total Landlords", value: total },
+          { label: "Active", value: landlords.filter((l) => l.status === "active").length },
+          { label: "Pending Review", value: landlords.filter((l) => l.status === "pending_verification").length },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="p-4">
@@ -83,7 +82,6 @@ export default function AdminLandlords() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1.5">
           {TABS.map((t) => (
@@ -91,7 +89,7 @@ export default function AdminLandlords() {
               className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
                 tab === t ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground"
               )}>
-              {t}
+              {TAB_LABELS[t] || t}
             </button>
           ))}
         </div>
@@ -106,55 +104,70 @@ export default function AdminLandlords() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
-                {["Landlord", "ID Number", "Plan", "Listings", "Occupancy", "Revenue", "Joined", "Status", ""].map((h) => (
+                {["Name", "Contact", "County", "Verification", "Status", "Joined", ""].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((l) => (
-                <tr key={l.id} className="border-b last:border-0 hover:bg-muted/20">
-                  <td className="px-4 py-3">
-                    <p className="text-xs font-medium">{l.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{l.email}</p>
-                  </td>
-                  <td className="px-4 py-3 text-xs font-mono text-muted-foreground">{l.idNumber}</td>
-                  <td className="px-4 py-3">
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", l.plan === "Professional" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600")}>{l.plan}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-center">{l.listings}</td>
-                  <td className="px-4 py-3 text-xs">
-                    <span className="font-medium">{l.listings > 0 ? Math.round((l.occupiedListings / l.listings) * 100) : 0}%</span>
-                    <span className="text-muted-foreground ml-1">({l.occupiedListings}/{l.listings})</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs font-medium">KES {l.totalRevenue.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                    {new Date(l.joinedOn).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", statusColors[l.status])}>{l.status}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <Button asChild variant="ghost" size="icon" className="h-7 w-7">
-                        <Link to={`/admin/landlords/${l.id}`}><Eye className="h-3.5 w-3.5" /></Link>
-                      </Button>
-                      {l.status === "Active" ? (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600 hover:bg-red-50" onClick={() => toast({ title: "Landlord suspended", description: l.name })}>
-                          <UserX className="h-3.5 w-3.5" />
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b">
+                    <td colSpan={7} className="px-4 py-3"><div className="h-4 bg-muted rounded animate-pulse" /></td>
+                  </tr>
+                ))
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">No landlords found.</td></tr>
+              ) : (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                filtered.map((l: any) => (
+                  <tr key={l._id} className="border-b last:border-0 hover:bg-muted/20">
+                    <td className="px-4 py-3">
+                      <p className="text-xs font-medium">{l.businessName || "—"}</p>
+                      <p className="text-[10px] text-muted-foreground">{l.contactEmail || "—"}</p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{l.contactPhone || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{l.county || "—"}</td>
+                    <td className="px-4 py-3">
+                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                        l.verificationStatus === "approved" ? "bg-green-100 text-green-700" :
+                        l.verificationStatus === "rejected" ? "bg-red-100 text-red-700" :
+                        "bg-amber-100 text-amber-700"
+                      )}>
+                        {l.verificationStatus?.replace(/_/g, " ") || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", statusColors[l.status] || "bg-gray-100 text-gray-600")}>
+                        {l.status || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(l.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                          <Link to={`/admin/landlords/${l._id}`}><Eye className="h-3.5 w-3.5" /></Link>
                         </Button>
-                      ) : l.status === "Suspended" && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:bg-green-50" onClick={() => toast({ title: "Landlord reinstated", description: l.name })}>
-                          <UserCheck className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {l.status === "active" ? (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => toggleStatusMutation.mutate({ id: l._id, status: "suspended" })}>
+                            <UserX className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : l.status === "suspended" && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={() => toggleStatusMutation.mutate({ id: l._id, status: "active" })}>
+                            <UserCheck className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
-          {filtered.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No landlords found.</p>}
         </CardContent>
       </Card>
     </div>

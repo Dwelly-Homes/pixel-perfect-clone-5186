@@ -1,20 +1,59 @@
+import { useQuery } from "@tanstack/react-query";
 import { Building2, Eye, MessageSquare, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { mockProperties } from "@/data/properties";
+import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
+import { transformProperty } from "@/lib/propertyTransform";
 
-const stats = [
-  { label: "Total Properties", value: mockProperties.length, icon: Building2, trend: "+2 this month" },
-  { label: "Total Views", value: "2,847", icon: Eye, trend: "+12% vs last month" },
-  { label: "Active Inquiries", value: 14, icon: MessageSquare, trend: "3 new today" },
-  { label: "Occupancy Rate", value: "87%", icon: TrendingUp, trend: "+4% vs last month" },
-];
+const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60";
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return "Just now";
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 export default function DashboardHome() {
+  const { user } = useAuth();
+  const firstName = user?.fullName?.split(" ")[0] ?? "there";
+
+  const { data: propertiesData } = useQuery({
+    queryKey: ["dashboardProperties"],
+    queryFn: async () => {
+      const { data } = await api.get("/properties?limit=3&sort=createdAt&order=desc");
+      return data;
+    },
+  });
+
+  const { data: inquiriesData } = useQuery({
+    queryKey: ["dashboardInquiries"],
+    queryFn: async () => {
+      const { data } = await api.get("/inquiries?limit=5");
+      return data;
+    },
+  });
+
+  const totalProperties = propertiesData?.pagination?.total ?? 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recentInquiries: any[] = inquiriesData?.data || [];
+  const newInquiries = recentInquiries.filter((i) => i.status === "new").length;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const properties: any[] = propertiesData?.data || [];
+
+  const stats = [
+    { label: "Total Properties", value: totalProperties, icon: Building2, trend: "on your account" },
+    { label: "Total Views", value: "—", icon: Eye, trend: "across listings" },
+    { label: "Active Inquiries", value: recentInquiries.length, icon: MessageSquare, trend: `${newInquiries} new` },
+    { label: "Occupancy Rate", value: "—", icon: TrendingUp, trend: "across all listings" },
+  ];
+
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-heading font-bold text-foreground">
-          Welcome back, James
+          Welcome back, {firstName}
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           Here's what's happening with your properties today.
@@ -44,19 +83,22 @@ export default function DashboardHome() {
             <CardTitle className="text-lg font-heading">Recent Inquiries</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {[
-              { name: "Sarah Wanjiku", property: "Modern 2BR in Kilimani", time: "2 hours ago" },
-              { name: "Michael Otieno", property: "Cozy Studio in Westlands", time: "5 hours ago" },
-              { name: "Grace Akinyi", property: "Elegant 1BR in Lavington", time: "1 day ago" },
-            ].map((inquiry) => (
-              <div key={inquiry.name} className="flex items-center justify-between py-2 border-b last:border-0">
-                <div>
-                  <p className="text-sm font-medium">{inquiry.name}</p>
-                  <p className="text-xs text-muted-foreground">{inquiry.property}</p>
+            {recentInquiries.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No inquiries yet.</p>
+            ) : (
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              recentInquiries.map((inq: any) => (
+                <div key={inq._id} className="flex items-center justify-between py-2 border-b last:border-0">
+                  <div>
+                    <p className="text-sm font-medium">{inq.senderName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {typeof inq.propertyId === "object" ? inq.propertyId?.title : "Property"}
+                    </p>
+                  </div>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo(inq.createdAt)}</span>
                 </div>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">{inquiry.time}</span>
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
 
@@ -65,26 +107,37 @@ export default function DashboardHome() {
             <CardTitle className="text-lg font-heading">Property Performance</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {mockProperties.slice(0, 3).map((prop) => (
-              <div key={prop.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <img
-                    src={prop.images[0]}
-                    alt={prop.title}
-                    className="h-10 w-10 rounded-md object-cover shrink-0"
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{prop.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      KES {prop.price.toLocaleString()}/mo
-                    </p>
+            {properties.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No properties yet.</p>
+            ) : (
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              properties.map((rawProp: any) => {
+                const prop = transformProperty(rawProp);
+                const coverImg = rawProp.images?.find((i: { isCover: boolean }) => i.isCover)?.url
+                  || rawProp.images?.[0]?.url
+                  || PLACEHOLDER_IMAGE;
+                return (
+                  <div key={rawProp._id} className="flex items-center justify-between py-2 border-b last:border-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={coverImg}
+                        alt={prop.title}
+                        className="h-10 w-10 rounded-md object-cover shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{prop.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          KES {prop.price.toLocaleString()}/mo
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap ml-2">
+                      {rawProp.viewCount ?? 0} views
+                    </span>
                   </div>
-                </div>
-                <span className="text-xs font-medium text-success whitespace-nowrap ml-2">
-                  {Math.floor(Math.random() * 80 + 120)} views
-                </span>
-              </div>
-            ))}
+                );
+              })
+            )}
           </CardContent>
         </Card>
       </div>

@@ -6,13 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
 
 export default function InviteMember() {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", role: "Agent" });
+  const [form, setForm] = useState({ name: "", email: "", role: "agent_staff" });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function validate() {
@@ -23,16 +23,20 @@ export default function InviteMember() {
     return errs;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      toast({ title: "Invitation sent!", description: `Invitation sent to ${form.email}` });
+    try {
+      await api.post("/users/invite", { fullName: form.name, email: form.email, role: form.role });
+      toast.success("Invitation sent!", { description: `Invitation sent to ${form.email}` });
       navigate("/dashboard/team");
-    }, 1200);
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -83,18 +87,11 @@ export default function InviteMember() {
                 onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}
                 className="space-y-3"
               >
-                <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-colors ${form.role === "Agent" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/30"}`}>
-                  <RadioGroupItem value="Agent" id="role-agent" className="mt-0.5" />
+                <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-colors ${form.role === "agent_staff" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/30"}`}>
+                  <RadioGroupItem value="agent_staff" id="role-agent" className="mt-0.5" />
                   <div>
                     <p className="font-medium text-sm">Agent Staff</p>
                     <p className="text-xs text-muted-foreground">Can create and manage property listings. Cannot access billing or settings.</p>
-                  </div>
-                </label>
-                <label className={`flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-colors ${form.role === "Caretaker" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/30"}`}>
-                  <RadioGroupItem value="Caretaker" id="role-caretaker" className="mt-0.5" />
-                  <div>
-                    <p className="font-medium text-sm">Caretaker</p>
-                    <p className="text-xs text-muted-foreground">Can view assigned properties and log maintenance updates only.</p>
                   </div>
                 </label>
               </RadioGroup>

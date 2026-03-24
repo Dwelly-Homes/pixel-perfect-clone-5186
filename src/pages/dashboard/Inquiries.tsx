@@ -1,33 +1,34 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, MessageSquare, Phone, Mail, Home, Clock, CheckCircle, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
-
-const mockInquiries = [
-  { id: "1", name: "Sarah Wanjiku", phone: "0712 345 678", email: "sarah@email.com", property: "Modern 2BR in Kilimani", message: "Hello, I am interested in this property. Could you please share more details about the lease terms and whether utilities are included in the rent?", time: "2024-06-20T09:30:00", status: "New", type: "General Inquiry" },
-  { id: "2", name: "Michael Otieno", phone: "0723 456 789", email: "michael@email.com", property: "Cozy Studio in Westlands", message: "I would like to schedule a viewing for this weekend if possible. Please let me know your availability.", time: "2024-06-20T07:15:00", status: "Viewing Requested", type: "Viewing Request" },
-  { id: "3", name: "Grace Akinyi", phone: "0734 567 890", email: "", property: "Elegant 1BR in Lavington", message: "Is this property still available? I am looking for a place to move in immediately.", time: "2024-06-19T16:00:00", status: "Responded", type: "General Inquiry" },
-  { id: "4", name: "Peter Kamau", phone: "0745 678 901", email: "peter@email.com", property: "Spacious 3BR in Karen", message: "Hi, I saw your listing and I am very interested. Can we arrange a call to discuss further?", time: "2024-06-19T11:30:00", status: "Closed", type: "General Inquiry" },
-  { id: "5", name: "Joyce Muthoni", phone: "0756 789 012", email: "joyce@email.com", property: "Modern 2BR in Kilimani", message: "I need a 2-bedroom apartment for a family of 4. Does this property allow children and small pets?", time: "2024-06-18T14:45:00", status: "New", type: "General Inquiry" },
-];
+import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
 
 const statusColor: Record<string, string> = {
-  New: "bg-blue-100 text-blue-800",
-  Responded: "bg-green-100 text-green-800",
-  "Viewing Requested": "bg-purple-100 text-purple-800",
-  Closed: "bg-gray-100 text-gray-600",
+  new: "bg-blue-100 text-blue-800",
+  responded: "bg-green-100 text-green-800",
+  viewing_request: "bg-purple-100 text-purple-800",
+  closed: "bg-gray-100 text-gray-600",
 };
 
-const tabs = ["All", "New", "Responded", "Viewing Requested", "Closed"];
+const statusLabel: Record<string, string> = {
+  new: "New",
+  responded: "Responded",
+  closed: "Closed",
+};
 
-function maskPhone(phone: string) {
-  return phone.slice(0, 4) + " XXX " + phone.slice(-3);
-}
+const typeLabel: Record<string, string> = {
+  general: "General Inquiry",
+  viewing_request: "Viewing Request",
+  booking_intent: "Booking Intent",
+};
+
+const tabs = ["All", "New", "Responded", "Closed"];
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -39,30 +40,50 @@ function timeAgo(dateStr: string) {
 }
 
 export default function Inquiries() {
-  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("All");
-  const [selected, setSelected] = useState<typeof mockInquiries[0] | null>(mockInquiries[0]);
-  const [inquiries, setInquiries] = useState(mockInquiries);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [selected, setSelected] = useState<any | null>(null);
 
-  const filtered = inquiries.filter((i) => {
-    const matchTab = tab === "All" || i.status === tab;
-    const matchSearch = i.name.toLowerCase().includes(search.toLowerCase()) ||
-      i.phone.includes(search) || i.property.toLowerCase().includes(search.toLowerCase());
+  const { data, isLoading } = useQuery({
+    queryKey: ["inquiries"],
+    queryFn: async () => {
+      const { data } = await api.get("/inquiries?limit=100");
+      return data;
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      api.patch(`/inquiries/${id}`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inquiries"] });
+      toast.success("Inquiry updated");
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  const rawInquiries = data?.data || [];
+
+  const filtered = rawInquiries.filter((i: { status: string; senderName: string; senderPhone: string; propertyId: { title: string } | null }) => {
+    const matchTab = tab === "All" || i.status === tab.toLowerCase();
+    const matchSearch =
+      i.senderName?.toLowerCase().includes(search.toLowerCase()) ||
+      i.senderPhone?.includes(search) ||
+      (i.propertyId && typeof i.propertyId === "object" && (i.propertyId as { title: string }).title?.toLowerCase().includes(search.toLowerCase()));
     return matchTab && matchSearch;
   });
 
-  function markResponded(id: string) {
-    setInquiries((prev) => prev.map((i) => i.id === id ? { ...i, status: "Responded" } : i));
-    if (selected?.id === id) setSelected((s) => s ? { ...s, status: "Responded" } : s);
-    toast({ title: "Marked as responded" });
-  }
+  const markResponded = (id: string) => {
+    updateMutation.mutate({ id, status: "responded" });
+    if (selected?._id === id) setSelected((s: { status: string } | null) => s ? { ...s, status: "responded" } : s);
+  };
 
-  function closeInquiry(id: string) {
-    setInquiries((prev) => prev.map((i) => i.id === id ? { ...i, status: "Closed" } : i));
-    if (selected?.id === id) setSelected((s) => s ? { ...s, status: "Closed" } : s);
-    toast({ title: "Inquiry closed" });
-  }
+  const closeInquiry = (id: string) => {
+    updateMutation.mutate({ id, status: "closed" });
+    if (selected?._id === id) setSelected((s: { status: string } | null) => s ? { ...s, status: "closed" } : s);
+  };
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
@@ -87,26 +108,38 @@ export default function Inquiries() {
           </div>
         </div>
         <div className="overflow-y-auto flex-1">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="p-4 border-b animate-pulse">
+                <div className="h-3 bg-muted rounded w-2/3 mb-2" />
+                <div className="h-3 bg-muted rounded w-1/2" />
+              </div>
+            ))
+          ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">No inquiries found.</div>
           ) : (
-            filtered.map((inq) => (
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            filtered.map((inq: any) => (
               <button
-                key={inq.id}
+                key={inq._id}
                 onClick={() => setSelected(inq)}
-                className={cn("w-full text-left p-4 border-b hover:bg-muted/30 transition-colors", selected?.id === inq.id && "bg-muted/50")}
+                className={cn("w-full text-left p-4 border-b hover:bg-muted/30 transition-colors", selected?._id === inq._id && "bg-muted/50")}
               >
                 <div className="flex items-start gap-2">
-                  {inq.status === "New" && <span className="mt-1.5 h-2 w-2 rounded-full bg-blue-500 shrink-0" />}
-                  {inq.status !== "New" && <span className="mt-1.5 h-2 w-2 shrink-0" />}
+                  {inq.status === "new" && <span className="mt-1.5 h-2 w-2 rounded-full bg-blue-500 shrink-0" />}
+                  {inq.status !== "new" && <span className="mt-1.5 h-2 w-2 shrink-0" />}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <span className="font-medium text-sm truncate">{inq.name}</span>
-                      <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${statusColor[inq.status]}`}>{inq.status}</span>
+                      <span className="font-medium text-sm truncate">{inq.senderName}</span>
+                      <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${statusColor[inq.status] || statusColor.closed}`}>
+                        {statusLabel[inq.status] || inq.status}
+                      </span>
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">{inq.property}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {typeof inq.propertyId === "object" ? inq.propertyId?.title : "Property"}
+                    </p>
                     <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                      <Clock className="h-3 w-3" />{timeAgo(inq.time)}
+                      <Clock className="h-3 w-3" />{timeAgo(inq.createdAt)}
                     </p>
                   </div>
                 </div>
@@ -129,38 +162,51 @@ export default function Inquiries() {
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-heading font-bold">{selected.name}</h2>
+                <h2 className="text-xl font-heading font-bold">{selected.senderName}</h2>
                 <div className="flex flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{maskPhone(selected.phone)}</span>
-                  {selected.email && <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" />{selected.email}</span>}
+                  <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{selected.senderPhone}</span>
+                  {selected.senderEmail && <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" />{selected.senderEmail}</span>}
                 </div>
               </div>
-              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusColor[selected.status]}`}>{selected.status}</span>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusColor[selected.status] || statusColor.closed}`}>
+                {statusLabel[selected.status] || selected.status}
+              </span>
             </div>
 
             <div className="flex items-center gap-2 p-3 bg-muted/40 rounded-lg">
               <Home className="h-4 w-4 text-muted-foreground shrink-0" />
               <div>
                 <p className="text-xs text-muted-foreground">Property</p>
-                <p className="text-sm font-medium">{selected.property}</p>
+                <p className="text-sm font-medium">
+                  {typeof selected.propertyId === "object" ? selected.propertyId?.title : "Property"}
+                </p>
               </div>
-              <Badge variant="outline" className="ml-auto text-xs">{selected.type}</Badge>
+              <Badge variant="outline" className="ml-auto text-xs">
+                {typeLabel[selected.inquiryType] || selected.inquiryType}
+              </Badge>
             </div>
+
+            {selected.requestedDate && (
+              <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg text-sm">
+                <Clock className="h-4 w-4 text-blue-600 shrink-0" />
+                <span>Requested viewing: <strong>{new Date(selected.requestedDate).toLocaleDateString("en-KE")}</strong> — {selected.requestedTimeSlot}</span>
+              </div>
+            )}
 
             <div className="space-y-2">
               <p className="text-sm font-medium">Message</p>
               <p className="text-sm text-muted-foreground bg-muted/30 p-4 rounded-lg leading-relaxed">{selected.message}</p>
-              <p className="text-xs text-muted-foreground">{new Date(selected.time).toLocaleString("en-KE")}</p>
+              <p className="text-xs text-muted-foreground">{new Date(selected.createdAt).toLocaleString("en-KE")}</p>
             </div>
 
             <div className="flex gap-3">
-              {selected.status !== "Responded" && selected.status !== "Closed" && (
-                <Button size="sm" className="bg-secondary hover:bg-secondary/90" onClick={() => markResponded(selected.id)}>
+              {selected.status !== "responded" && selected.status !== "closed" && (
+                <Button size="sm" className="bg-secondary hover:bg-secondary/90" onClick={() => markResponded(selected._id)}>
                   <CheckCircle className="h-4 w-4 mr-1.5" />Mark as Responded
                 </Button>
               )}
-              {selected.status !== "Closed" && (
-                <Button size="sm" variant="outline" onClick={() => closeInquiry(selected.id)}>
+              {selected.status !== "closed" && (
+                <Button size="sm" variant="outline" onClick={() => closeInquiry(selected._id)}>
                   <X className="h-4 w-4 mr-1.5" />Close Inquiry
                 </Button>
               )}

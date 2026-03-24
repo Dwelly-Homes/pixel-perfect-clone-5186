@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   UserPlus, Search, MoreVertical, Mail, Shield, UserCheck, UserX, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -17,68 +17,100 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-
-const mockTeam = [
-  { id: "1", name: "James Mwangi", email: "james@dwelly.co.ke", role: "Admin", status: "Active", joined: "2024-01-10", initials: "JM" },
-  { id: "2", name: "Alice Wanjiku", email: "alice@dwelly.co.ke", role: "Agent", status: "Active", joined: "2024-02-15", initials: "AW" },
-  { id: "3", name: "Peter Otieno", email: "peter@dwelly.co.ke", role: "Agent", status: "Active", joined: "2024-03-01", initials: "PO" },
-  { id: "4", name: "Grace Akinyi", email: "grace@dwelly.co.ke", role: "Caretaker", status: "Pending Invite", joined: "2024-06-20", initials: "GA" },
-  { id: "5", name: "David Kamau", email: "david@dwelly.co.ke", role: "Agent", status: "Suspended", joined: "2024-04-05", initials: "DK" },
-];
+import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
 
 const roleBadgeColor: Record<string, string> = {
-  Admin: "bg-primary text-primary-foreground",
-  Agent: "bg-blue-100 text-blue-800",
-  Caretaker: "bg-gray-100 text-gray-700",
+  tenant_admin: "bg-primary text-primary-foreground",
+  agent_staff: "bg-blue-100 text-blue-800",
+  caretaker: "bg-gray-100 text-gray-700",
+};
+
+const roleLabel: Record<string, string> = {
+  tenant_admin: "Admin",
+  agent_staff: "Agent",
+  caretaker: "Caretaker",
 };
 
 const statusDot: Record<string, string> = {
-  Active: "bg-green-500",
-  "Pending Invite": "bg-yellow-500",
-  Suspended: "bg-red-500",
+  active: "bg-green-500",
+  pending: "bg-yellow-500",
+  suspended: "bg-red-500",
+  invited: "bg-yellow-500",
+};
+
+const statusLabel: Record<string, string> = {
+  active: "Active",
+  pending: "Pending Invite",
+  suspended: "Suspended",
+  invited: "Pending Invite",
 };
 
 export default function TeamMembers() {
-  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [team, setTeam] = useState(mockTeam);
   const [changeRoleOpen, setChangeRoleOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
-  const [selected, setSelected] = useState<(typeof mockTeam)[0] | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [selected, setSelected] = useState<any | null>(null);
   const [newRole, setNewRole] = useState("");
 
+  const { data, isLoading } = useQuery({
+    queryKey: ["teamMembers"],
+    queryFn: async () => {
+      const { data } = await api.get("/users");
+      return data.data || [];
+    },
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) =>
+      api.patch(`/users/${id}/role`, { role }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teamMembers"] });
+      setChangeRoleOpen(false);
+      toast.success(`${selected?.fullName} is now ${roleLabel[newRole] || newRole}`);
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  const toggleStatusMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mutationFn: (member: any) => api.patch(`/users/${member._id}/toggle-status`),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onSuccess: (_: any, member: any) => {
+      queryClient.invalidateQueries({ queryKey: ["teamMembers"] });
+      toast.success(member.status === "suspended" ? "Member reactivated" : "Member suspended");
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/users/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teamMembers"] });
+      setRemoveOpen(false);
+      toast.success(`${selected?.fullName} has been removed.`);
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const team: any[] = data || [];
   const filtered = team.filter(
     (m) =>
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.email.toLowerCase().includes(search.toLowerCase())
+      m.fullName?.toLowerCase().includes(search.toLowerCase()) ||
+      m.email?.toLowerCase().includes(search.toLowerCase())
   );
 
   function handleChangeRole() {
     if (!selected || !newRole) return;
-    setTeam((prev) =>
-      prev.map((m) => (m.id === selected.id ? { ...m, role: newRole } : m))
-    );
-    setChangeRoleOpen(false);
-    toast({ title: "Role updated", description: `${selected.name} is now ${newRole}` });
+    updateRoleMutation.mutate({ id: selected._id, role: newRole });
   }
 
   function handleRemove() {
     if (!selected) return;
-    setTeam((prev) => prev.filter((m) => m.id !== selected.id));
-    setRemoveOpen(false);
-    toast({ title: "Member removed", description: `${selected.name} has been removed.` });
-  }
-
-  function handleSuspend(member: (typeof mockTeam)[0]) {
-    setTeam((prev) =>
-      prev.map((m) =>
-        m.id === member.id
-          ? { ...m, status: m.status === "Suspended" ? "Active" : "Suspended" }
-          : m
-      )
-    );
-    toast({ title: member.status === "Suspended" ? "Member reactivated" : "Member suspended" });
+    removeMutation.mutate(selected._id);
   }
 
   return (
@@ -109,7 +141,9 @@ export default function TeamMembers() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : filtered.length === 0 ? (
             <div className="p-12 text-center">
               <UserPlus className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
               <p className="font-medium">Your team is empty</p>
@@ -132,71 +166,77 @@ export default function TeamMembers() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((member) => (
-                    <tr key={member.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-                              {member.initials}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium">{member.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        <div className="flex items-center gap-1.5">
-                          <Mail className="h-3.5 w-3.5" />
-                          {member.email}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${roleBadgeColor[member.role]}`}>
-                          {member.role}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className={`h-2 w-2 rounded-full ${statusDot[member.status]}`} />
-                          <span className="text-xs">{member.status}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs">
-                        {new Date(member.joined).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
-                      </td>
-                      <td className="px-4 py-3">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => { setSelected(member); setNewRole(member.role); setChangeRoleOpen(true); }}
-                            >
-                              <Shield className="h-4 w-4 mr-2" />
-                              Change Role
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleSuspend(member)}>
-                              {member.status === "Suspended" ? (
-                                <><UserCheck className="h-4 w-4 mr-2" />Reactivate</>
-                              ) : (
-                                <><UserX className="h-4 w-4 mr-2" />Suspend</>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => { setSelected(member); setRemoveOpen(true); }}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Remove from Team
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  ))}
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {filtered.map((member: any) => {
+                    const initials = member.fullName
+                      ? member.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+                      : "??";
+                    return (
+                      <tr key={member._id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+                                {initials}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium">{member.fullName}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            <Mail className="h-3.5 w-3.5" />
+                            {member.email}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${roleBadgeColor[member.role] || "bg-gray-100 text-gray-700"}`}>
+                            {roleLabel[member.role] || member.role}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`h-2 w-2 rounded-full ${statusDot[member.status] || "bg-gray-400"}`} />
+                            <span className="text-xs">{statusLabel[member.status] || member.status}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">
+                          {new Date(member.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                        </td>
+                        <td className="px-4 py-3">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => { setSelected(member); setNewRole(member.role); setChangeRoleOpen(true); }}
+                              >
+                                <Shield className="h-4 w-4 mr-2" />
+                                Change Role
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleStatusMutation.mutate(member)}>
+                                {member.status === "suspended" ? (
+                                  <><UserCheck className="h-4 w-4 mr-2" />Reactivate</>
+                                ) : (
+                                  <><UserX className="h-4 w-4 mr-2" />Suspend</>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => { setSelected(member); setRemoveOpen(true); }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remove from Team
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -211,21 +251,20 @@ export default function TeamMembers() {
             <DialogTitle>Change Role</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">Update role for <strong>{selected?.name}</strong></p>
+            <p className="text-sm text-muted-foreground">Update role for <strong>{selected?.fullName}</strong></p>
             <Select value={newRole} onValueChange={setNewRole}>
               <SelectTrigger>
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Admin">Admin</SelectItem>
-                <SelectItem value="Agent">Agent</SelectItem>
-                <SelectItem value="Caretaker">Caretaker</SelectItem>
+                <SelectItem value="tenant_admin">Admin</SelectItem>
+                <SelectItem value="agent_staff">Agent</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setChangeRoleOpen(false)}>Cancel</Button>
-            <Button onClick={handleChangeRole} className="bg-secondary hover:bg-secondary/90">Save</Button>
+            <Button onClick={handleChangeRole} disabled={updateRoleMutation.isPending} className="bg-secondary hover:bg-secondary/90">Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -237,11 +276,11 @@ export default function TeamMembers() {
             <DialogTitle>Remove Team Member</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground py-2">
-            Are you sure you want to remove <strong>{selected?.name}</strong> from your team? This action cannot be undone.
+            Are you sure you want to remove <strong>{selected?.fullName}</strong> from your team? This action cannot be undone.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleRemove}>Remove</Button>
+            <Button variant="destructive" disabled={removeMutation.isPending} onClick={handleRemove}>Remove</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

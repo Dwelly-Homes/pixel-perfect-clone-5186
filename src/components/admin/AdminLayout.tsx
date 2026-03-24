@@ -1,10 +1,14 @@
-import { Outlet, NavLink, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, ShieldCheck, ScrollText,
   BadgeCheck, LogOut, ChevronLeft, Bell, Building2,
   UserSquare2, Home, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 const navGroups = [
   {
@@ -35,13 +39,39 @@ const navGroups = [
 
 export function AdminLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, isLoading, user, logout } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && (!isAuthenticated || user?.role !== "platform_admin")) {
+      navigate("/login");
+    }
+  }, [isAuthenticated, isLoading, user, navigate]);
+
+  const handleLogout = async () => {
+    try {
+      const refreshToken = localStorage.getItem("refreshToken");
+      await api.post("/auth/logout", { refreshToken });
+    } catch {
+      // ignore
+    }
+    logout();
+    toast.success("Signed out successfully");
+    navigate("/login");
+  };
 
   const isActive = (url: string, exact = false) =>
     exact ? location.pathname === url : location.pathname.startsWith(url);
 
+  const initials = user?.fullName
+    ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+    : "AD";
+
+  if (isLoading) return null;
+  if (!isAuthenticated || user?.role !== "platform_admin") return null;
+
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
       <aside className="w-56 shrink-0 border-r flex flex-col bg-sidebar overflow-y-auto">
         <div className="p-4 border-b shrink-0">
           <div className="flex items-center gap-2">
@@ -84,22 +114,20 @@ export function AdminLayout() {
           <NavLink to="/dashboard" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors">
             <ChevronLeft className="h-4 w-4" />Dashboard
           </NavLink>
-          <NavLink to="/login" className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors">
+          <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors">
             <LogOut className="h-4 w-4" />Sign Out
-          </NavLink>
+          </button>
         </div>
       </aside>
 
-      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-14 border-b flex items-center justify-between px-6 shrink-0">
           <p className="text-sm font-medium text-muted-foreground">Admin Portal</p>
           <div className="flex items-center gap-3">
             <button className="relative h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors">
               <Bell className="h-4 w-4" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive" />
             </button>
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">AD</div>
+            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">{initials}</div>
           </div>
         </header>
         <main className="flex-1 overflow-auto">

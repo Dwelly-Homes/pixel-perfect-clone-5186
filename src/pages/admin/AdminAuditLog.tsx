@@ -1,69 +1,73 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Search, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 
-type ActionType = "verification" | "listing" | "account" | "payment" | "admin";
-
-interface AuditEntry {
-  id: string;
-  timestamp: string;
-  admin: string;
-  action: string;
-  subject: string;
-  type: ActionType;
-  ip: string;
-  details?: string;
-}
-
-const LOGS: AuditEntry[] = [
-  { id: "1", timestamp: "2024-06-20T14:32:00", admin: "Admin User", action: "Approved verification", subject: "James Kariuki", type: "verification", ip: "41.90.64.12" },
-  { id: "2", timestamp: "2024-06-20T13:15:00", admin: "Admin User", action: "Requested more info", subject: "KeyHomes Agency", type: "verification", ip: "41.90.64.12", details: "ID photos unclear" },
-  { id: "3", timestamp: "2024-06-20T11:00:00", admin: "Super Admin", action: "Suspended agent", subject: "FastLet Ltd", type: "account", ip: "197.232.1.45", details: "Multiple complaints from tenants" },
-  { id: "4", timestamp: "2024-06-19T16:45:00", admin: "Admin User", action: "Removed listing", subject: "Suspicious 1BR in CBD", type: "listing", ip: "41.90.64.12", details: "Fraudulent listing report" },
-  { id: "5", timestamp: "2024-06-19T09:20:00", admin: "Super Admin", action: "Rejected verification", subject: "Nairobi Realty Ltd", type: "verification", ip: "197.232.1.45", details: "Expired EARB certificate" },
-  { id: "6", timestamp: "2024-06-18T15:30:00", admin: "Admin User", action: "Waived commission", subject: "Grace Akinyi", type: "payment", ip: "41.90.64.12" },
-  { id: "7", timestamp: "2024-06-18T10:00:00", admin: "Super Admin", action: "Created admin account", subject: "New Admin", type: "admin", ip: "197.232.1.45" },
-  { id: "8", timestamp: "2024-06-17T14:10:00", admin: "Admin User", action: "Flagged tenant", subject: "Amina Hassan", type: "account", ip: "41.90.64.12", details: "Reports of property damage" },
-  { id: "9", timestamp: "2024-06-17T09:00:00", admin: "Admin User", action: "Updated EARB status", subject: "TopFlat Agency", type: "verification", ip: "41.90.64.12", details: "EARB certificate expired" },
-  { id: "10", timestamp: "2024-06-16T16:00:00", admin: "Super Admin", action: "Approved verification", subject: "Sarah Mutua", type: "verification", ip: "197.232.1.45" },
-];
-
-const typeColors: Record<ActionType, string> = {
+const typeColors: Record<string, string> = {
   verification: "bg-blue-100 text-blue-700",
   listing: "bg-purple-100 text-purple-700",
   account: "bg-amber-100 text-amber-700",
   payment: "bg-green-100 text-green-700",
   admin: "bg-red-100 text-red-700",
+  property: "bg-purple-100 text-purple-700",
+  inquiry: "bg-teal-100 text-teal-700",
+  notification: "bg-gray-100 text-gray-700",
 };
 
+function getActionCategory(action: string): string {
+  if (action.includes("VERIFICATION") || action.includes("REVIEW")) return "verification";
+  if (action.includes("PROPERTY") || action.includes("LISTING")) return "listing";
+  if (action.includes("PAYMENT") || action.includes("BILLING")) return "payment";
+  if (action.includes("ACCOUNT") || action.includes("SUSPEND") || action.includes("USER")) return "account";
+  if (action.includes("INQUIRY")) return "inquiry";
+  return "admin";
+}
+
 export default function AdminAuditLog() {
-  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [adminFilter, setAdminFilter] = useState("all");
 
-  const admins = [...new Set(LOGS.map((l) => l.admin))];
+  const { data, isLoading } = useQuery({
+    queryKey: ["auditLog"],
+    queryFn: async () => {
+      const { data } = await api.get("/admin/audit-log?limit=100");
+      return data;
+    },
+  });
 
-  const filtered = LOGS.filter((l) => {
-    if (typeFilter !== "all" && l.type !== typeFilter) return false;
-    if (adminFilter !== "all" && l.admin !== adminFilter) return false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const logs: any[] = data?.data || [];
+
+  const filtered = logs.filter((l) => {
+    const category = getActionCategory(l.action || "");
+    if (typeFilter !== "all" && category !== typeFilter) return false;
     const q = search.toLowerCase();
-    if (q && !l.action.toLowerCase().includes(q) && !l.subject.toLowerCase().includes(q)) return false;
+    if (q) {
+      const action = (l.action || "").toLowerCase();
+      const actor = (l.actorEmail || l.actorId || "").toLowerCase();
+      const resource = (l.resourceType || "").toLowerCase();
+      if (!action.includes(q) && !actor.includes(q) && !resource.includes(q)) return false;
+    }
     return true;
   });
 
   function exportCSV() {
-    const header = "Timestamp,Admin,Action,Subject,Type,IP\n";
-    const rows = filtered.map((l) => `"${l.timestamp}","${l.admin}","${l.action}","${l.subject}",${l.type},${l.ip}`).join("\n");
+    const header = "Timestamp,Actor,Action,Resource,IP\n";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = filtered.map((l: any) =>
+      `"${l.createdAt}","${l.actorEmail || l.actorId || ""}","${l.action}","${l.resourceType || ""}","${l.ipAddress || ""}"`
+    ).join("\n");
     const blob = new Blob([header + rows], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "audit-log.csv"; a.click();
-    toast({ title: "Audit log exported" });
+    URL.revokeObjectURL(url);
+    toast.success("Audit log exported");
   }
 
   return (
@@ -78,7 +82,6 @@ export default function AdminAuditLog() {
         </Button>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -97,15 +100,6 @@ export default function AdminAuditLog() {
             <SelectItem value="admin">Admin</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={adminFilter} onValueChange={setAdminFilter}>
-          <SelectTrigger className="h-8 text-xs w-40">
-            <SelectValue placeholder="Admin" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Admins</SelectItem>
-            {admins.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-          </SelectContent>
-        </Select>
         <span className="text-xs text-muted-foreground ml-auto">{filtered.length} entries</span>
       </div>
 
@@ -114,36 +108,49 @@ export default function AdminAuditLog() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
-                {["Timestamp", "Admin", "Action", "Subject", "Type", "IP Address"].map((h) => (
+                {["Timestamp", "Actor", "Action", "Resource", "Type", "IP Address"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((l) => (
-                <tr key={l.id} className="border-b last:border-0 hover:bg-muted/20">
-                  <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                    {new Date(l.timestamp).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
-                    {" "}
-                    <span className="font-mono">{new Date(l.timestamp).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs font-medium">{l.admin}</td>
-                  <td className="px-4 py-3">
-                    <div>
-                      <p className="text-xs">{l.action}</p>
-                      {l.details && <p className="text-[10px] text-muted-foreground mt-0.5">{l.details}</p>}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{l.subject}</td>
-                  <td className="px-4 py-3">
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize", typeColors[l.type])}>{l.type}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{l.ip}</td>
-                </tr>
-              ))}
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b">
+                    <td colSpan={6} className="px-4 py-3"><div className="h-4 bg-muted rounded animate-pulse" /></td>
+                  </tr>
+                ))
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">No log entries found.</td></tr>
+              ) : (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                filtered.map((l: any) => {
+                  const category = getActionCategory(l.action || "");
+                  return (
+                    <tr key={l._id} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(l.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                        {" "}
+                        <span className="font-mono">{new Date(l.createdAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs font-medium">{l.actorEmail || l.actorId || "System"}</td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <p className="text-xs">{(l.action || "").toLowerCase().replace(/_/g, " ")}</p>
+                          {l.details && <p className="text-[10px] text-muted-foreground mt-0.5">{typeof l.details === "string" ? l.details : JSON.stringify(l.details)}</p>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{l.resourceType || "—"}</td>
+                      <td className="px-4 py-3">
+                        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize", typeColors[category] || "bg-gray-100 text-gray-700")}>{category}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{l.ipAddress || "—"}</td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-          {filtered.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No log entries found.</p>}
         </CardContent>
       </Card>
     </div>

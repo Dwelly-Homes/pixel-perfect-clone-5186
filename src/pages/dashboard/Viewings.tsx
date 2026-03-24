@@ -1,22 +1,18 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, List, CheckCircle, X, Clock, Phone, Home, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
 
-const mockViewings = [
-  { id: "1", date: "2024-06-24", slot: "Morning (8am-12pm)", tenant: "Sarah Wanjiku", phone: "0712 345 678", property: "Modern 2BR in Kilimani", status: "Pending" },
-  { id: "2", date: "2024-06-24", slot: "Afternoon (12pm-5pm)", tenant: "Michael Otieno", phone: "0723 456 789", property: "Cozy Studio in Westlands", status: "Confirmed" },
-  { id: "3", date: "2024-06-25", slot: "Morning (8am-12pm)", tenant: "Grace Akinyi", phone: "0734 567 890", property: "Elegant 1BR in Lavington", status: "Pending" },
-  { id: "4", date: "2024-06-26", slot: "Evening (5pm-7pm)", tenant: "Peter Kamau", phone: "0745 678 901", property: "Spacious 3BR in Karen", status: "Confirmed" },
-  { id: "5", date: "2024-06-28", slot: "Afternoon (12pm-5pm)", tenant: "Joyce Muthoni", phone: "0756 789 012", property: "Modern 2BR in Kilimani", status: "Completed" },
-  { id: "6", date: "2024-06-20", slot: "Morning (8am-12pm)", tenant: "David Njoroge", phone: "0767 890 123", property: "Cozy Studio in Westlands", status: "Cancelled" },
-];
+// Backend inquiry statuses map to viewing statuses
+const statusToDisplay: Record<string, string> = {
+  new: "Pending",
+  responded: "Confirmed",
+  closed: "Completed",
+};
 
 const statusColor: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-800",
@@ -35,38 +31,78 @@ function getFirstDay(year: number, month: number) {
 }
 
 export default function Viewings() {
-  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<"calendar" | "list">("calendar");
   const [filter, setFilter] = useState("All");
-  const [viewings, setViewings] = useState(mockViewings);
   const today = new Date();
   const [calMonth, setCalMonth] = useState(today.getMonth());
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate());
 
-  const upcoming = viewings.filter(v => new Date(v.date) >= new Date(today.toDateString()));
-  const thisWeekUpcoming = upcoming.filter(v => {
-    const d = new Date(v.date);
+  const { data, isLoading } = useQuery({
+    queryKey: ["viewings"],
+    queryFn: async () => {
+      const { data } = await api.get("/inquiries?limit=100");
+      // Filter only viewing_request type
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const all = data?.data || [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return all.filter((i: any) => i.inquiryType === "viewing_request");
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      api.patch(`/inquiries/${id}`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["viewings"] });
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawViewings: any[] = data || [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function getDisplayStatus(v: any): string {
+    // If status is closed, check if it was previously confirmed (responded) - treat as Completed
+    // Otherwise, use the mapping
+    return statusToDisplay[v.status] || v.status;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function getDateStr(v: any): string {
+    return v.requestedDate ? new Date(v.requestedDate).toISOString().split("T")[0] : "";
+  }
+
+  const upcoming = rawViewings.filter((v) => {
+    const d = getDateStr(v);
+    return d && new Date(d) >= new Date(today.toDateString());
+  });
+
+  const thisWeekUpcoming = upcoming.filter((v) => {
+    const d = new Date(getDateStr(v));
     const diff = (d.getTime() - today.getTime()) / 86400000;
     return diff <= 7;
   });
 
-  const filtered = viewings.filter((v) => {
-    const d = new Date(v.date);
-    const past = d < new Date(today.toDateString());
+  const filtered = rawViewings.filter((v) => {
+    const d = getDateStr(v);
+    if (!d) return filter === "All";
+    const past = new Date(d) < new Date(today.toDateString());
     if (filter === "Upcoming") return !past;
     if (filter === "Past") return past;
     return true;
   });
 
-  function confirm(id: string) {
-    setViewings((p) => p.map((v) => v.id === id ? { ...v, status: "Confirmed" } : v));
-    toast({ title: "Viewing confirmed" });
+  function confirmViewing(id: string) {
+    updateMutation.mutate({ id, status: "responded" });
+    toast.success("Viewing confirmed");
   }
 
-  function cancel(id: string) {
-    setViewings((p) => p.map((v) => v.id === id ? { ...v, status: "Cancelled" } : v));
-    toast({ title: "Viewing cancelled" });
+  function cancelViewing(id: string) {
+    updateMutation.mutate({ id, status: "closed" });
+    toast.success("Viewing cancelled");
   }
 
   const daysInMonth = getDaysInMonth(calYear, calMonth);
@@ -75,10 +111,19 @@ export default function Viewings() {
 
   function viewingsOnDay(day: number) {
     const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return viewings.filter((v) => v.date === dateStr);
+    return rawViewings.filter((v) => getDateStr(v) === dateStr);
   }
 
   const selectedDayViewings = selectedDay ? viewingsOnDay(selectedDay) : [];
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="h-8 bg-muted rounded w-48 mb-2 animate-pulse" />
+        <div className="h-4 bg-muted rounded w-32 animate-pulse" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -101,7 +146,6 @@ export default function Viewings() {
 
       {mode === "calendar" ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Calendar */}
           <div className="lg:col-span-2">
             <Card>
               <CardHeader className="pb-3">
@@ -152,7 +196,6 @@ export default function Viewings() {
             </Card>
           </div>
 
-          {/* Day panel */}
           <div>
             <Card className="h-full">
               <CardHeader>
@@ -167,15 +210,16 @@ export default function Viewings() {
                   <p className="text-sm text-muted-foreground">No viewings on this day.</p>
                 ) : (
                   <div className="space-y-3">
-                    {selectedDayViewings.map((v) => (
-                      <div key={v.id} className="p-3 bg-muted/40 rounded-lg space-y-1.5">
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {selectedDayViewings.map((v: any) => (
+                      <div key={v._id} className="p-3 bg-muted/40 rounded-lg space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium">{v.tenant}</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${statusColor[v.status]}`}>{v.status}</span>
+                          <span className="text-sm font-medium">{v.senderName}</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${statusColor[getDisplayStatus(v)] || ""}`}>{getDisplayStatus(v)}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" />{v.slot}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Home className="h-3 w-3" />{v.property}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" />{v.phone}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" />{v.requestedTimeSlot || "—"}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Home className="h-3 w-3" />{typeof v.propertyId === "object" ? v.propertyId?.title : "—"}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" />{v.senderPhone}</p>
                       </div>
                     ))}
                   </div>
@@ -207,32 +251,41 @@ export default function Viewings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((v) => (
-                    <tr key={v.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3 whitespace-nowrap">{new Date(v.date).toLocaleDateString("en-KE", { day: "numeric", month: "short" })}</td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{v.slot}</td>
-                      <td className="px-4 py-3 font-medium whitespace-nowrap">{v.tenant}</td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{v.phone}</td>
-                      <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate">{v.property}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor[v.status]}`}>{v.status}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-1.5">
-                          {v.status === "Pending" && (
-                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => confirm(v.id)}>
-                              <CheckCircle className="h-3 w-3 mr-1" />Confirm
-                            </Button>
-                          )}
-                          {(v.status === "Pending" || v.status === "Confirmed") && (
-                            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => cancel(v.id)}>
-                              <X className="h-3 w-3 mr-1" />Cancel
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {filtered.map((v: any) => {
+                    const displayStatus = getDisplayStatus(v);
+                    const dateStr = getDateStr(v);
+                    return (
+                      <tr key={v._id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {dateStr ? new Date(dateStr).toLocaleDateString("en-KE", { day: "numeric", month: "short" }) : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{v.requestedTimeSlot || "—"}</td>
+                        <td className="px-4 py-3 font-medium whitespace-nowrap">{v.senderName}</td>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{v.senderPhone}</td>
+                        <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate">
+                          {typeof v.propertyId === "object" ? v.propertyId?.title : "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor[displayStatus] || ""}`}>{displayStatus}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1.5">
+                            {v.status === "new" && (
+                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => confirmViewing(v._id)}>
+                                <CheckCircle className="h-3 w-3 mr-1" />Confirm
+                              </Button>
+                            )}
+                            {(v.status === "new" || v.status === "responded") && (
+                              <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => cancelViewing(v._id)}>
+                                <X className="h-3 w-3 mr-1" />Cancel
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {filtered.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No viewings found.</p>}

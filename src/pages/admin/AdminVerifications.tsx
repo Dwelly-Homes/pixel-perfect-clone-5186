@@ -1,60 +1,65 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Search, Eye, Clock, CheckCircle2, XCircle, AlertCircle, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 
-type VerifStatus = "Pending" | "Under Review" | "Info Requested" | "Approved" | "Rejected" | "Suspended";
+type VerifStatus = "documents_uploaded" | "under_review" | "information_requested" | "approved" | "rejected" | "suspended" | "not_submitted";
 
-interface VerifItem {
-  id: string;
-  name: string;
-  type: "Estate Agent" | "Landlord";
-  email: string;
-  submitted: string;
-  status: VerifStatus;
-  docs: number;
-  docsTotal: number;
-}
+const TABS = ["All", "documents_uploaded", "under_review", "information_requested", "approved", "rejected", "suspended"] as const;
 
-const ITEMS: VerifItem[] = [
-  { id: "1", name: "Prestige Properties Ltd", type: "Estate Agent", email: "info@prestige.co.ke", submitted: "2024-06-20", status: "Pending", docs: 5, docsTotal: 5 },
-  { id: "2", name: "Grace Wambui", type: "Landlord", email: "grace.wambui@gmail.com", submitted: "2024-06-19", status: "Under Review", docs: 3, docsTotal: 3 },
-  { id: "3", name: "KeyHomes Agency", type: "Estate Agent", email: "admin@keyhomes.co.ke", submitted: "2024-06-18", status: "Info Requested", docs: 4, docsTotal: 5 },
-  { id: "4", name: "James Kariuki", type: "Landlord", email: "james.k@gmail.com", submitted: "2024-06-17", status: "Approved", docs: 3, docsTotal: 3 },
-  { id: "5", name: "Nairobi Realty Ltd", type: "Estate Agent", email: "info@nairobi-realty.co.ke", submitted: "2024-06-16", status: "Rejected", docs: 3, docsTotal: 5 },
-  { id: "6", name: "FastLet Ltd", type: "Estate Agent", email: "admin@fastlet.co.ke", submitted: "2024-06-10", status: "Suspended", docs: 5, docsTotal: 5 },
-  { id: "7", name: "Sarah Mutua", type: "Landlord", email: "sarah.m@yahoo.com", submitted: "2024-06-09", status: "Approved", docs: 3, docsTotal: 3 },
-  { id: "8", name: "TopFlat Agency", type: "Estate Agent", email: "info@topflat.co.ke", submitted: "2024-06-08", status: "Pending", docs: 5, docsTotal: 5 },
-];
-
-const TABS = ["All", "Pending", "Under Review", "Info Requested", "Approved", "Rejected", "Suspended"] as const;
-
-const statusConfig: Record<VerifStatus, { icon: React.ElementType; color: string; bg: string }> = {
-  Pending: { icon: Clock, color: "text-amber-700", bg: "bg-amber-100" },
-  "Under Review": { icon: ShieldCheck, color: "text-blue-700", bg: "bg-blue-100" },
-  "Info Requested": { icon: AlertCircle, color: "text-orange-700", bg: "bg-orange-100" },
-  Approved: { icon: CheckCircle2, color: "text-green-700", bg: "bg-green-100" },
-  Rejected: { icon: XCircle, color: "text-red-700", bg: "bg-red-100" },
-  Suspended: { icon: XCircle, color: "text-red-900", bg: "bg-red-200" },
+const TAB_LABELS: Record<string, string> = {
+  All: "All",
+  documents_uploaded: "Pending",
+  under_review: "Under Review",
+  information_requested: "Info Requested",
+  approved: "Approved",
+  rejected: "Rejected",
+  suspended: "Suspended",
 };
 
-const counts = TABS.reduce((acc, t) => {
-  acc[t] = t === "All" ? ITEMS.length : ITEMS.filter((i) => i.status === t).length;
-  return acc;
-}, {} as Record<string, number>);
+const statusConfig: Record<VerifStatus, { icon: React.ElementType; color: string; bg: string; label: string }> = {
+  not_submitted: { icon: Clock, color: "text-gray-600", bg: "bg-gray-100", label: "Not Submitted" },
+  documents_uploaded: { icon: Clock, color: "text-amber-700", bg: "bg-amber-100", label: "Pending" },
+  under_review: { icon: ShieldCheck, color: "text-blue-700", bg: "bg-blue-100", label: "Under Review" },
+  information_requested: { icon: AlertCircle, color: "text-orange-700", bg: "bg-orange-100", label: "Info Requested" },
+  approved: { icon: CheckCircle2, color: "text-green-700", bg: "bg-green-100", label: "Approved" },
+  rejected: { icon: XCircle, color: "text-red-700", bg: "bg-red-100", label: "Rejected" },
+  suspended: { icon: XCircle, color: "text-red-900", bg: "bg-red-200", label: "Suspended" },
+};
 
 export default function AdminVerifications() {
   const [tab, setTab] = useState<typeof TABS[number]>("All");
   const [search, setSearch] = useState("");
 
-  const filtered = ITEMS.filter((i) => {
-    if (tab !== "All" && i.status !== tab) return false;
-    if (search && !i.name.toLowerCase().includes(search.toLowerCase()) && !i.email.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
+  const { data, isLoading } = useQuery({
+    queryKey: ["adminVerifications", tab],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: "50" });
+      if (tab !== "All") params.set("status", tab);
+      const { data } = await api.get(`/verification/admin?${params.toString()}`);
+      return data;
+    },
   });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: any[] = data?.data || [];
+  const total = data?.pagination?.total ?? 0;
+
+  const filtered = items.filter((i) => {
+    if (!search) return true;
+    const name = typeof i.tenantId === "object" ? i.tenantId?.businessName?.toLowerCase() : "";
+    const email = typeof i.tenantId === "object" ? i.tenantId?.contactEmail?.toLowerCase() : "";
+    const q = search.toLowerCase();
+    return name.includes(q) || email.includes(q);
+  });
+
+  // Count by status for tab badges (from current fetched data)
+  const counts: Record<string, number> = { All: total };
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
@@ -75,8 +80,13 @@ export default function AdminVerifications() {
               tab === t ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground"
             )}
           >
-            {t}
-            {counts[t] > 0 && (
+            {TAB_LABELS[t] || t}
+            {t === "All" && total > 0 && (
+              <span className={cn("text-[10px] rounded-full px-1.5 py-0.5 font-bold",
+                tab === t ? "bg-white/20 text-white" : "bg-muted-foreground/20"
+              )}>{total}</span>
+            )}
+            {counts[t] > 0 && t !== "All" && (
               <span className={cn("text-[10px] rounded-full px-1.5 py-0.5 font-bold",
                 tab === t ? "bg-white/20 text-white" : "bg-muted-foreground/20"
               )}>{counts[t]}</span>
@@ -102,34 +112,60 @@ export default function AdminVerifications() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item) => {
-                const sc = statusConfig[item.status];
-                const StatusIcon = sc.icon;
-                return (
-                  <tr key={item.id} className="border-b last:border-0 hover:bg-muted/20">
-                    <td className="px-4 py-3 text-xs font-medium">{item.name}</td>
-                    <td className="px-4 py-3"><span className="text-[10px] px-2 py-0.5 rounded-full bg-muted font-medium">{item.type}</span></td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{item.email}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(item.submitted).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{item.docs}/{item.docsTotal}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit", sc.bg, sc.color)}>
-                        <StatusIcon className="h-3 w-3" />{item.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
-                        <Link to={`/admin/verifications/${item.id}`}><Eye className="h-3.5 w-3.5 mr-1" />Review</Link>
-                      </Button>
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b">
+                    <td colSpan={7} className="px-4 py-3">
+                      <div className="h-4 bg-muted rounded animate-pulse" />
                     </td>
                   </tr>
-                );
-              })}
+                ))
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">No verifications found.</td>
+                </tr>
+              ) : (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                filtered.map((item: any) => {
+                  const status = item.status as VerifStatus;
+                  const sc = statusConfig[status] || statusConfig.not_submitted;
+                  const StatusIcon = sc.icon;
+                  const tenant = typeof item.tenantId === "object" ? item.tenantId : null;
+                  const docsUploaded = item.documents?.length ?? 0;
+                  const accountType = tenant?.accountType;
+                  const docsTotal = accountType === "estate_agent" ? 5 : 3;
+
+                  return (
+                    <tr key={item._id} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-4 py-3 text-xs font-medium">{tenant?.businessName || "—"}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted font-medium">
+                          {accountType?.replace("_", " ") || "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{tenant?.contactEmail || "—"}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                        {item.submittedAt
+                          ? new Date(item.submittedAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{docsUploaded}/{docsTotal}</td>
+                      <td className="px-4 py-3">
+                        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit", sc.bg, sc.color)}>
+                          <StatusIcon className="h-3 w-3" />{sc.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
+                          <Link to={`/admin/verifications/${item._id}`}><Eye className="h-3.5 w-3.5 mr-1" />Review</Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-          {filtered.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No verifications found.</p>}
         </CardContent>
       </Card>
     </div>

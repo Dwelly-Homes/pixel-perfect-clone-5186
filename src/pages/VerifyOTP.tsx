@@ -5,13 +5,19 @@ import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Home, MailCheck } from "lucide-react";
 import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function VerifyOTP() {
   const navigate = useNavigate();
+  const { setAuth } = useAuth();
   const location = useLocation();
-  const email = (location.state as { email?: string })?.email || "your email";
+  const state = location.state as { phone?: string; email?: string } | null;
+  const phone = state?.phone || "";
+  const email = state?.email || "your email";
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(60);
 
   useEffect(() => {
@@ -20,22 +26,42 @@ export default function VerifyOTP() {
     return () => clearTimeout(t);
   }, [countdown]);
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     if (otp.length < 6) {
       toast.error("Please enter the full 6-digit code");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const { data } = await api.post("/auth/verify-otp", { phone, otp });
+      const { accessToken, refreshToken, user } = data.data;
+      setAuth(user, accessToken, refreshToken);
+      toast.success("Phone verified! Welcome to Dwelly Homes.");
+      if (user.role === "platform_admin") navigate("/admin");
+      else if (user.role === "searcher") navigate("/tenant");
+      else navigate("/dashboard");
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
       setLoading(false);
-      toast.success("Email verified! Welcome to Dwelly Homes.");
-      navigate("/");
-    }, 1200);
+    }
   };
 
-  const handleResend = () => {
-    setCountdown(60);
-    toast.info("A new verification code has been sent");
+  const handleResend = async () => {
+    if (!phone) {
+      toast.error("Phone number not found. Please register again.");
+      return;
+    }
+    setResending(true);
+    try {
+      await api.post("/auth/resend-otp", { phone });
+      setCountdown(60);
+      toast.info("A new verification code has been sent");
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setResending(false);
+    }
   };
 
   return (
@@ -56,7 +82,8 @@ export default function VerifyOTP() {
           </div>
           <h2 className="font-heading text-2xl font-bold text-foreground">Check your inbox</h2>
           <p className="text-sm text-muted-foreground font-body max-w-xs">
-            We sent a 6-digit verification code to <span className="font-medium text-foreground">{email}</span>
+            We sent a 6-digit verification code to{" "}
+            <span className="font-medium text-foreground">{phone || email}</span>
           </p>
         </div>
 
@@ -86,8 +113,8 @@ export default function VerifyOTP() {
           {countdown > 0 ? (
             <span>Resend in {countdown}s</span>
           ) : (
-            <button onClick={handleResend} className="text-secondary hover:text-orange-dark font-medium transition-colors">
-              Resend code
+            <button onClick={handleResend} disabled={resending} className="text-secondary hover:text-orange-dark font-medium transition-colors disabled:opacity-50">
+              {resending ? "Sending…" : "Resend code"}
             </button>
           )}
         </p>

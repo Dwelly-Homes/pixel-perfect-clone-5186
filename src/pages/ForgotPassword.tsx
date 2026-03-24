@@ -6,23 +6,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Home, Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
       toast.error("Please enter your email");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await api.post("/auth/forgot-password", { identifier: email });
       setSent(true);
-    }, 1000);
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

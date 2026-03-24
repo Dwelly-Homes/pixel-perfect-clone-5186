@@ -1,22 +1,15 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bell, Home, FileText, CreditCard, AlertTriangle, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
-
-const mockNotifications = [
-  { id: "1", type: "property", title: "New inquiry received", body: "Sarah Wanjiku has sent an inquiry about Modern 2BR in Kilimani.", time: "2024-06-20T09:30:00", read: false, link: "/dashboard/inquiries" },
-  { id: "2", type: "verification", title: "Verification approved", body: "Congratulations! Your organization has been verified. You can now post property listings.", time: "2024-06-19T14:00:00", read: false, link: "/dashboard/verification" },
-  { id: "3", type: "payment", title: "Payment confirmed", body: "Your Professional Plan subscription payment of KES 4,500 was received. Receipt: MPESA-XYZ123.", time: "2024-06-18T10:30:00", read: true, link: "/dashboard/billing" },
-  { id: "4", type: "property", title: "Viewing request", body: "Michael Otieno has requested a viewing for Cozy Studio in Westlands this Saturday morning.", time: "2024-06-17T16:45:00", read: true, link: "/dashboard/viewings" },
-  { id: "5", type: "warning", title: "EARB certificate expiring soon", body: "Your EARB practicing certificate expires in 25 days. Please renew it to keep your listings active.", time: "2024-06-16T08:00:00", read: false, link: "/dashboard/verification" },
-  { id: "6", type: "system", title: "Welcome to Dwelly Homes!", body: "Your account has been created. Complete your verification to start listing properties.", time: "2024-06-01T12:00:00", read: true, link: "/dashboard" },
-  { id: "7", type: "payment", title: "Commission payment due", body: "A commission of KES 2,800 is due for the move-in of Grace Akinyi to Elegant 1BR in Lavington.", time: "2024-06-15T09:00:00", read: true, link: "/dashboard/commissions" },
-];
+import { api, getApiError } from "@/lib/api";
+import { toast } from "sonner";
 
 const typeIcon: Record<string, React.ElementType> = {
   property: Home,
+  inquiry: Home,
   verification: FileText,
   payment: CreditCard,
   warning: AlertTriangle,
@@ -25,6 +18,7 @@ const typeIcon: Record<string, React.ElementType> = {
 
 const typeColor: Record<string, string> = {
   property: "text-blue-600 bg-blue-50",
+  inquiry: "text-blue-600 bg-blue-50",
   verification: "text-green-600 bg-green-50",
   payment: "text-purple-600 bg-purple-50",
   warning: "text-amber-600 bg-amber-50",
@@ -43,34 +37,52 @@ function timeAgo(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-KE", { day: "numeric", month: "short" });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function filterNotifs(notifications: any[], tab: string) {
+  if (tab === "All") return notifications;
+  if (tab === "Unread") return notifications.filter((n) => !n.isRead);
+  if (tab === "Verification") return notifications.filter((n) => n.type === "verification");
+  if (tab === "Payments") return notifications.filter((n) => n.type === "payment");
+  if (tab === "Properties") return notifications.filter((n) => n.type === "property" || n.type === "inquiry");
+  if (tab === "System") return notifications.filter((n) => n.type === "system" || n.type === "warning");
+  return notifications;
+}
+
 export default function Notifications() {
-  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState("All");
-  const [notifications, setNotifications] = useState(mockNotifications);
   const [page, setPage] = useState(1);
   const PER_PAGE = 20;
 
-  function markAllRead() {
-    setNotifications((n) => n.map((item) => ({ ...item, read: true })));
-    toast({ title: "All notifications marked as read" });
-  }
-
-  function markRead(id: string) {
-    setNotifications((n) => n.map((item) => item.id === id ? { ...item, read: true } : item));
-  }
-
-  const filtered = notifications.filter((n) => {
-    if (tab === "All") return true;
-    if (tab === "Unread") return !n.read;
-    if (tab === "Verification") return n.type === "verification";
-    if (tab === "Payments") return n.type === "payment";
-    if (tab === "Properties") return n.type === "property";
-    if (tab === "System") return n.type === "system" || n.type === "warning";
-    return true;
+  const { data, isLoading } = useQuery({
+    queryKey: ["notifications", page],
+    queryFn: async () => {
+      const { data } = await api.get(`/notifications?page=${page}&limit=${PER_PAGE}`);
+      return data;
+    },
   });
 
-  const paginated = filtered.slice(0, page * PER_PAGE);
-  const unread = notifications.filter((n) => !n.read).length;
+  const markAllMutation = useMutation({
+    mutationFn: () => api.patch("/notifications/read-all"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["unreadNotifications"] });
+      toast.success("All notifications marked as read");
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  const markOneMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/notifications/${id}/read`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["unreadNotifications"] });
+    },
+  });
+
+  const notifications = data?.data || [];
+  const filtered = filterNotifs(notifications, tab);
+  const unread = notifications.filter((n: { isRead: boolean }) => !n.isRead).length;
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -83,7 +95,7 @@ export default function Notifications() {
           <p className="text-sm text-muted-foreground mt-1">Stay up to date with your property activities.</p>
         </div>
         {unread > 0 && (
-          <Button variant="ghost" size="sm" className="text-xs shrink-0" onClick={markAllRead}>
+          <Button variant="ghost" size="sm" className="text-xs shrink-0" onClick={() => markAllMutation.mutate()}>
             <CheckCheck className="h-3.5 w-3.5 mr-1.5" />Mark all as read
           </Button>
         )}
@@ -102,7 +114,17 @@ export default function Notifications() {
       </div>
 
       <div className="space-y-2">
-        {paginated.length === 0 ? (
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex gap-4 p-4 rounded-xl border animate-pulse">
+              <div className="h-10 w-10 rounded-full bg-muted shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-muted rounded w-1/2" />
+                <div className="h-3 bg-muted rounded w-3/4" />
+              </div>
+            </div>
+          ))
+        ) : filtered.length === 0 ? (
           <div className="py-20 text-center space-y-3">
             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto">
               <Bell className="h-6 w-6 text-muted-foreground" />
@@ -111,24 +133,25 @@ export default function Notifications() {
             <p className="text-sm text-muted-foreground">No notifications yet.</p>
           </div>
         ) : (
-          paginated.map((n) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          filtered.map((n: any) => {
             const Icon = typeIcon[n.type] ?? Bell;
             return (
               <div
-                key={n.id}
-                onClick={() => markRead(n.id)}
+                key={n._id}
+                onClick={() => !n.isRead && markOneMutation.mutate(n._id)}
                 className={cn(
                   "flex gap-4 p-4 rounded-xl border transition-colors cursor-pointer hover:bg-muted/30",
-                  !n.read && "bg-background border-l-4 border-l-primary"
+                  !n.isRead && "bg-background border-l-4 border-l-primary"
                 )}
               >
-                <div className={cn("h-10 w-10 rounded-full flex items-center justify-center shrink-0", typeColor[n.type])}>
+                <div className={cn("h-10 w-10 rounded-full flex items-center justify-center shrink-0", typeColor[n.type] || typeColor.system)}>
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className={cn("text-sm", !n.read && "font-semibold")}>{n.title}</p>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo(n.time)}</span>
+                    <p className={cn("text-sm", !n.isRead && "font-semibold")}>{n.title}</p>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo(n.createdAt)}</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
                 </div>
@@ -138,7 +161,7 @@ export default function Notifications() {
         )}
       </div>
 
-      {paginated.length < filtered.length && (
+      {data?.pagination && data.pagination.page < data.pagination.pages && (
         <div className="text-center">
           <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)}>
             Load more

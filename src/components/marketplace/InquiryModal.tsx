@@ -1,19 +1,21 @@
 import { useState } from "react";
-import { X, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
 
 interface InquiryModalProps {
   open: boolean;
   onClose: () => void;
+  propertyId: string;
   propertyTitle: string;
   agentName: string;
 }
 
-export function InquiryModal({ open, onClose, propertyTitle, agentName }: InquiryModalProps) {
+export function InquiryModal({ open, onClose, propertyId, propertyTitle, agentName }: InquiryModalProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -24,11 +26,22 @@ export function InquiryModal({ open, onClose, propertyTitle, agentName }: Inquir
     e.preventDefault();
     if (!name || !phone) return;
     setSubmitting(true);
-    // Simulate API call
-    await new Promise(r => setTimeout(r, 1000));
-    setSubmitting(false);
-    toast.success("Your inquiry has been sent! The agent will contact you shortly.");
-    onClose();
+    try {
+      await api.post("/inquiries", {
+        propertyId,
+        inquiryType: "general",
+        senderName: name,
+        senderPhone: `+254${phone.replace(/^0/, "")}`,
+        senderEmail: email || undefined,
+        message,
+      });
+      toast.success("Your inquiry has been sent! The agent will contact you shortly.");
+      onClose();
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -43,7 +56,7 @@ export function InquiryModal({ open, onClose, propertyTitle, agentName }: Inquir
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label className="font-body">Full Name *</Label>
-            <Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1" />
           </div>
           <div>
             <Label className="font-body">Phone Number *</Label>
@@ -51,7 +64,7 @@ export function InquiryModal({ open, onClose, propertyTitle, agentName }: Inquir
               <span className="flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">+254</span>
               <Input
                 value={phone}
-                onChange={e => setPhone(e.target.value)}
+                onChange={(e) => setPhone(e.target.value)}
                 placeholder="7XX XXX XXX"
                 required
                 className="rounded-l-none"
@@ -60,11 +73,11 @@ export function InquiryModal({ open, onClose, propertyTitle, agentName }: Inquir
           </div>
           <div>
             <Label className="font-body">Email (optional)</Label>
-            <Input value={email} onChange={e => setEmail(e.target.value)} type="email" className="mt-1" />
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1" />
           </div>
           <div>
             <Label className="font-body">Message</Label>
-            <Textarea value={message} onChange={e => setMessage(e.target.value)} rows={3} className="mt-1" />
+            <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} className="mt-1" />
           </div>
           <button
             type="submit"

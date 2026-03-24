@@ -17,7 +17,10 @@ import {
   UserPlus,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import {
   Sidebar,
   SidebarContent,
@@ -59,6 +62,18 @@ export function DashboardSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      const refreshToken = localStorage.getItem("refreshToken");
+      await api.post("/auth/logout", { refreshToken });
+    } catch { /* ignore */ }
+    logout();
+    toast.success("Signed out successfully");
+    navigate("/login");
+  };
 
   const isActive = (path: string) =>
     path === "/dashboard"
@@ -169,11 +184,9 @@ export function DashboardSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Sign Out" asChild>
-              <NavLink to="/login">
-                <LogOut className="h-4 w-4" />
-                <span>Sign Out</span>
-              </NavLink>
+            <SidebarMenuButton tooltip="Sign Out" onClick={handleLogout}>
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

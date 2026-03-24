@@ -1,23 +1,42 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
-// Simulated token validation
-const MOCK_INVITE = { valid: true, orgName: "Nairobi Realty Ltd", role: "Agent", email: "alice@agency.co.ke" };
+interface InviteInfo {
+  email: string;
+  fullName: string;
+  role: string;
+  tenantName?: string;
+}
 
 export default function InviteAccept() {
   const navigate = useNavigate();
+  const { token } = useParams<{ token: string }>();
+  const { setAuth } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [form, setForm] = useState({ name: "", password: "", confirm: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [invite, setInvite] = useState<InviteInfo | null>(null);
+  const [tokenValid, setTokenValid] = useState<boolean | null>(null);
 
-  // Simulate token invalid scenario (set to false to test error state)
-  const tokenValid = MOCK_INVITE.valid;
+  useEffect(() => {
+    if (!token) { setTokenValid(false); return; }
+    api.get(`/users/invitations/validate?token=${token}`)
+      .then(({ data }) => {
+        setInvite(data.data);
+        setForm((f) => ({ ...f, name: data.data.fullName || "" }));
+        setTokenValid(true);
+      })
+      .catch(() => setTokenValid(false));
+  }, [token]);
 
   function validate() {
     const errs: Record<string, string> = {};
@@ -28,15 +47,35 @@ export default function InviteAccept() {
     return errs;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const { data } = await api.post("/users/invitations/accept", {
+        token,
+        fullName: form.name,
+        password: form.password,
+      });
+      if (data.data?.accessToken) {
+        setAuth(data.data.user, data.data.accessToken, data.data.refreshToken);
+      }
+      toast.success("Account created! Welcome to Dwelly Homes.");
       navigate("/dashboard");
-    }, 1400);
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (tokenValid === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-8 w-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   if (!tokenValid) {
@@ -58,7 +97,6 @@ export default function InviteAccept() {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
-      {/* Brand panel */}
       <div className="hidden lg:flex lg:w-2/5 bg-primary flex-col items-center justify-center p-12 text-primary-foreground">
         <div className="text-center space-y-4 max-w-xs">
           <div className="h-16 w-16 rounded-2xl bg-secondary flex items-center justify-center mx-auto text-white font-heading font-bold text-2xl">D</div>
@@ -67,7 +105,6 @@ export default function InviteAccept() {
         </div>
       </div>
 
-      {/* Form panel */}
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-background">
         <div className="w-full max-w-md space-y-6">
           <div className="lg:hidden flex items-center gap-3 mb-6">
@@ -75,12 +112,14 @@ export default function InviteAccept() {
             <span className="font-heading font-semibold text-lg">Dwelly Homes</span>
           </div>
 
-          <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-            <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
-            <p className="text-sm text-green-800">
-              You have been invited to join <strong>{MOCK_INVITE.orgName}</strong> on Dwelly Homes as <strong>{MOCK_INVITE.role}</strong>.
-            </p>
-          </div>
+          {invite && (
+            <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+              <p className="text-sm text-green-800">
+                You have been invited to join <strong>{invite.tenantName || "Dwelly Homes"}</strong> as <strong>{invite.role}</strong>.
+              </p>
+            </div>
+          )}
 
           <div>
             <h2 className="text-2xl font-heading font-bold">Accept Invitation</h2>
@@ -90,7 +129,7 @@ export default function InviteAccept() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label>Email Address</Label>
-              <Input value={MOCK_INVITE.email} disabled className="bg-muted" />
+              <Input value={invite?.email || ""} disabled className="bg-muted" />
             </div>
 
             <div className="space-y-1.5">

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, MapPin, BadgeCheck, Shield, Heart, Share2,
   Check, ChevronLeft, ChevronRight, X, Send, Eye, Calendar
@@ -10,18 +11,47 @@ import { InquiryModal } from "@/components/marketplace/InquiryModal";
 import { ViewingModal } from "@/components/marketplace/ViewingModal";
 import { PropertyCard } from "@/components/marketplace/PropertyCard";
 import { Badge } from "@/components/ui/badge";
-import { mockProperties } from "@/data/properties";
+import { api } from "@/lib/api";
+import { transformProperty } from "@/lib/propertyTransform";
 
 export default function PropertyDetail() {
   const { id } = useParams();
-  const property = mockProperties.find(p => p.id === id);
   const [currentImage, setCurrentImage] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [inquiryOpen, setInquiryOpen] = useState(false);
   const [viewingOpen, setViewingOpen] = useState(false);
   const [favorited, setFavorited] = useState(false);
 
-  if (!property) {
+  const { data: rawProperty, isLoading, isError } = useQuery({
+    queryKey: ["property", id],
+    queryFn: async () => {
+      const { data } = await api.get(`/properties/marketplace/${id}`);
+      return data.data;
+    },
+    enabled: !!id,
+  });
+
+  const { data: relatedRaw = [] } = useQuery({
+    queryKey: ["relatedProperties", rawProperty?.county],
+    queryFn: async () => {
+      const { data } = await api.get(`/properties/marketplace?county=${rawProperty?.county}&limit=4`);
+      return (data.data || []).filter((p: { _id: string }) => p._id !== id);
+    },
+    enabled: !!rawProperty?.county,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <MarketplaceNav />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="h-10 w-10 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !rawProperty) {
     return (
       <div className="min-h-screen flex flex-col">
         <MarketplaceNav />
@@ -35,21 +65,18 @@ export default function PropertyDetail() {
     );
   }
 
+  const property = transformProperty(rawProperty);
   const formattedPrice = new Intl.NumberFormat("en-KE").format(property.price);
+  const relatedProperties = relatedRaw.slice(0, 4).map(transformProperty);
 
-  const relatedProperties = mockProperties
-    .filter(p => p.id !== property.id && p.location.county === property.location.county)
-    .slice(0, 4);
-
-  const nextImage = () => setCurrentImage(i => (i + 1) % property.images.length);
-  const prevImage = () => setCurrentImage(i => (i - 1 + property.images.length) % property.images.length);
+  const nextImage = () => setCurrentImage((i) => (i + 1) % property.images.length);
+  const prevImage = () => setCurrentImage((i) => (i - 1 + property.images.length) % property.images.length);
 
   return (
     <div className="min-h-screen flex flex-col">
       <MarketplaceNav />
 
       <div className="container mx-auto px-4 py-6 flex-1">
-        {/* Breadcrumb */}
         <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground font-body mb-4">
           <ArrowLeft className="h-4 w-4" /> Back to marketplace
         </Link>
@@ -84,7 +111,6 @@ export default function PropertyDetail() {
                   />
                 ))}
               </div>
-              {/* Badges */}
               <div className="absolute top-3 left-3 flex flex-col gap-1.5">
                 {property.agent.earbLicensed && (
                   <Badge className="bg-success text-success-foreground text-xs shadow-sm">
@@ -162,23 +188,25 @@ export default function PropertyDetail() {
             </div>
 
             {/* Amenities */}
-            <div>
-              <h2 className="font-heading text-lg font-semibold text-foreground mb-3">Features & Amenities</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {property.amenities.map(a => (
-                  <div key={a} className="flex items-center gap-2 text-sm font-body text-foreground">
-                    <Check className="h-4 w-4 text-success shrink-0" />
-                    {a}
-                  </div>
-                ))}
+            {property.amenities.length > 0 && (
+              <div>
+                <h2 className="font-heading text-lg font-semibold text-foreground mb-3">Features & Amenities</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {property.amenities.map((a) => (
+                    <div key={a} className="flex items-center gap-2 text-sm font-body text-foreground">
+                      <Check className="h-4 w-4 text-success shrink-0" />
+                      {a}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Map Placeholder */}
+            {/* Location */}
             <div>
               <h2 className="font-heading text-lg font-semibold text-foreground mb-3">Location</h2>
               <div className="rounded-xl bg-muted h-64 flex items-center justify-center text-muted-foreground font-body text-sm">
-                <MapPin className="h-6 w-6 mr-2" /> Map integration — {property.location.neighborhood}, {property.location.county}
+                <MapPin className="h-6 w-6 mr-2" /> {property.location.neighborhood}, {property.location.county}
               </div>
             </div>
           </div>
@@ -186,7 +214,6 @@ export default function PropertyDetail() {
           {/* Right column — Agent + Contact */}
           <div className="space-y-4">
             <div className="sticky top-20 space-y-4">
-              {/* Agent Card */}
               <div className="rounded-xl border border-border bg-card p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg">
@@ -210,14 +237,9 @@ export default function PropertyDetail() {
                       <Shield className="h-4 w-4 text-success" /> EARB Licensed
                     </div>
                   )}
-                  <div className="text-xs font-body text-muted-foreground">
-                    Member since {property.agent.memberSince}
-                  </div>
-                  <div className="text-xs font-body text-muted-foreground">
-                    Responds within {property.agent.responseRate}
-                  </div>
+                  <div className="text-xs font-body text-muted-foreground">Member since {property.agent.memberSince}</div>
+                  <div className="text-xs font-body text-muted-foreground">Responds within {property.agent.responseRate}</div>
                 </div>
-
                 <div className="space-y-2">
                   <button
                     onClick={() => setInquiryOpen(true)}
@@ -234,7 +256,6 @@ export default function PropertyDetail() {
                 </div>
               </div>
 
-              {/* Quick Stats */}
               <div className="rounded-xl border border-border bg-card p-5 grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-muted-foreground font-body">Type</p>
@@ -261,10 +282,10 @@ export default function PropertyDetail() {
         {relatedProperties.length > 0 && (
           <div className="mt-12">
             <h2 className="font-heading text-xl font-semibold text-foreground mb-6">
-              More properties in {property.location.neighborhood}
+              More properties in {property.location.county}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {relatedProperties.map(p => (
+              {relatedProperties.map((p) => (
                 <PropertyCard key={p.id} property={p} />
               ))}
             </div>
@@ -287,7 +308,7 @@ export default function PropertyDetail() {
             src={property.images[currentImage]}
             alt={property.title}
             className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           />
           <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-4 text-primary-foreground/80 hover:text-primary-foreground">
             <ChevronRight className="h-10 w-10" />
@@ -301,12 +322,14 @@ export default function PropertyDetail() {
       <InquiryModal
         open={inquiryOpen}
         onClose={() => setInquiryOpen(false)}
+        propertyId={rawProperty._id}
         propertyTitle={property.title}
         agentName={property.agent.name}
       />
       <ViewingModal
         open={viewingOpen}
         onClose={() => setViewingOpen(false)}
+        propertyId={rawProperty._id}
         propertyTitle={property.title}
       />
     </div>

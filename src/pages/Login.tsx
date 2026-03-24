@@ -7,25 +7,40 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { setAuth } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.email || !form.password) {
       toast.error("Please fill in all fields");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const { data } = await api.post("/auth/login", {
+        identifier: form.email,
+        password: form.password,
+      });
+      const { accessToken, refreshToken, user } = data.data;
+      setAuth(user, accessToken, refreshToken);
       toast.success("Welcome back to Dwelly Homes!");
-      navigate("/");
-    }, 1200);
+      // Redirect based on role
+      if (user.role === "platform_admin") navigate("/admin");
+      else if (user.role === "searcher") navigate("/tenant");
+      else navigate("/dashboard");
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
