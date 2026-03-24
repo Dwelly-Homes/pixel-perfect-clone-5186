@@ -20,6 +20,7 @@ import TenantDashboard from "./pages/tenant/TenantDashboard.tsx";
 import LandlordOnboarding from "./pages/landlord/LandlordOnboarding.tsx";
 import LandlordDashboard from "./pages/landlord/LandlordDashboard.tsx";
 import TenantBookings from "./pages/tenant/TenantBookings.tsx";
+import TenantPayments from "./pages/tenant/TenantPayments.tsx";
 import LandlordInquiries from "./pages/landlord/LandlordInquiries.tsx";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="/tenant" element={<TenantDashboard />} />
           <Route path="/tenant/onboarding" element={<TenantOnboarding />} />
           <Route path="/tenant/bookings" element={<TenantBookings />} />
+          <Route path="/tenant/payments" element={<TenantPayments />} />
           <Route path="/landlord" element={<LandlordDashboard />} />
           <Route path="/landlord/onboarding" element={<LandlordOnboarding />} />
           <Route path="/landlord/inquiries" element={<LandlordInquiries />} />
