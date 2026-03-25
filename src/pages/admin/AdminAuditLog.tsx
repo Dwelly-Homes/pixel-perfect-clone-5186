@@ -67,7 +67,7 @@ export default function AdminAuditLog() {
     const header = "Timestamp,Actor,Action,Resource,IP\n";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows = logs.map((l: any) =>
-      `"${l.createdAt}","${l.actorEmail || l.actorId || ""}","${l.action}","${l.resourceType || ""}","${l.ipAddress || ""}"`
+      `"${l.createdAt}","${l.actorEmail || (typeof l.actorId === "object" ? l.actorId?.email || l.actorId?.fullName : l.actorId) || ""}","${l.action}","${l.resourceType || ""}","${l.ipAddress || ""}"`
     ).join("\n");
     const blob = new Blob([header + rows], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -145,7 +145,9 @@ export default function AdminAuditLog() {
                         {" "}
                         <span className="font-mono">{new Date(l.createdAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}</span>
                       </td>
-                      <td className="px-4 py-3 text-xs font-medium">{l.actorEmail || l.actorId || "System"}</td>
+                      <td className="px-4 py-3 text-xs font-medium">
+                        {l.actorEmail || (typeof l.actorId === "object" ? l.actorId?.email || l.actorId?.fullName : l.actorId) || "System"}
+                      </td>
                       <td className="px-4 py-3">
                         <p className="text-xs">{(l.action || "").replace(/\./g, " › ")}</p>
                       </td>
