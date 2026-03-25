@@ -80,7 +80,7 @@ export default function Notifications() {
     },
   });
 
-  const notifications = data?.data || [];
+  const notifications = Array.isArray(data?.data) ? data.data : [];
   const filtered = filterNotifs(notifications, tab);
   const unread = notifications.filter((n: { isRead: boolean }) => !n.isRead).length;
 

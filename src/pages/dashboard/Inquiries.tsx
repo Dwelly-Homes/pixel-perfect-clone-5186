@@ -75,7 +75,7 @@ export default function Inquiries() {
     onError: (err) => toast.error(getApiError(err)),
   });
 
-  const rawInquiries = data?.data || [];
+  const rawInquiries = Array.isArray(data?.data) ? data.data : [];
   const total: number = data?.meta?.total ?? 0;
   const totalPages: number = data?.meta?.totalPages ?? 1;
 

@@ -37,10 +37,10 @@ export default function DashboardHome() {
 
   const totalProperties = propertiesData?.pagination?.total ?? 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recentInquiries: any[] = inquiriesData?.data || [];
+  const recentInquiries: any[] = Array.isArray(inquiriesData?.data) ? inquiriesData.data : [];
   const newInquiries = recentInquiries.filter((i) => i.status === "new").length;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const properties: any[] = propertiesData?.data || [];
+  const properties: any[] = Array.isArray(propertiesData?.data) ? propertiesData.data : [];
 
   const stats = [
     { label: "Total Properties", value: totalProperties, icon: Building2, trend: "on your account" },
