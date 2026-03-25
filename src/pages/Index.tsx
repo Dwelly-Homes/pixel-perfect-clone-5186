@@ -98,11 +98,10 @@ export default function Marketplace() {
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
-      const p = lastPage?.pagination;
+      const p = lastPage?.meta;
       if (!p) return undefined;
-      // Handle both { page, pages } and { page, totalPages } API shapes
-      const currentPage = Number(p.page ?? p.currentPage ?? 0);
-      const totalPages = Number(p.pages ?? p.totalPages ?? 0);
+      const currentPage = Number(p.page ?? 0);
+      const totalPages = Number(p.totalPages ?? 0);
       if (!currentPage || !totalPages) return undefined;
       return currentPage < totalPages ? currentPage + 1 : undefined;
     },
@@ -178,7 +177,7 @@ export default function Marketplace() {
     return results;
   }, [allRaw, bedroomFilter, selectedAmenities, sortBy]);
 
-  const total = data?.pages?.[0]?.pagination?.total ?? filtered.length;
+  const total = data?.pages?.[0]?.meta?.total ?? filtered.length;
 
   const gridClass = viewMode === "grid"
     ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"
