@@ -47,7 +47,14 @@ export default function Marketplace() {
   const [bedroomFilter, setBedroomFilter] = useState("Any");
   const [priceSlider, setPriceSlider] = useState<[number, number]>([0, 500000]);
 
+  // Sentinel always lives in the DOM — observer is set up once
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Use refs so the observer callback always has the latest values
+  // without needing to be recreated
+  const hasNextPageRef = useRef(false);
+  const isFetchingNextPageRef = useRef(false);
+  const fetchNextPageRef = useRef<() => void>(() => {});
 
   const typeToBackend: Record<string, string> = {
     "Bedsitter": "bedsitter",
@@ -79,7 +86,9 @@ export default function Marketplace() {
       if (selectedCounty !== "all") params.set("county", selectedCounty);
       if (selectedType !== "All" && typeToBackend[selectedType]) params.set("propertyType", typeToBackend[selectedType]);
       const minPrice = priceRange ? priceRange.min : priceSlider[0];
-      const maxPrice = priceRange ? (priceRange.max === Infinity ? priceSlider[1] : Math.min(priceRange.max, priceSlider[1])) : priceSlider[1];
+      const maxPrice = priceRange
+        ? (priceRange.max === Infinity ? priceSlider[1] : Math.min(priceRange.max, priceSlider[1]))
+        : priceSlider[1];
       if (minPrice > 0) params.set("minPrice", String(minPrice));
       if (maxPrice < 500000) params.set("maxPrice", String(maxPrice));
       params.set("limit", String(ITEMS_PER_PAGE));
@@ -89,13 +98,44 @@ export default function Marketplace() {
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
-      const pagination = lastPage?.pagination;
-      if (!pagination) return undefined;
-      return pagination.page < pagination.pages ? pagination.page + 1 : undefined;
+      const p = lastPage?.pagination;
+      if (!p) return undefined;
+      // Handle both { page, pages } and { page, totalPages } API shapes
+      const currentPage = Number(p.page ?? p.currentPage ?? 0);
+      const totalPages = Number(p.pages ?? p.totalPages ?? 0);
+      if (!currentPage || !totalPages) return undefined;
+      return currentPage < totalPages ? currentPage + 1 : undefined;
     },
     placeholderData: keepPreviousData,
     staleTime: 2 * 60 * 1000,
   });
+
+  // Keep refs in sync with latest query state
+  useEffect(() => { hasNextPageRef.current = !!hasNextPage; }, [hasNextPage]);
+  useEffect(() => { isFetchingNextPageRef.current = isFetchingNextPage; }, [isFetchingNextPage]);
+  useEffect(() => { fetchNextPageRef.current = fetchNextPage; }, [fetchNextPage]);
+
+  // Set up observer ONCE on mount — sentinel is always in the DOM
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          hasNextPageRef.current &&
+          !isFetchingNextPageRef.current
+        ) {
+          fetchNextPageRef.current();
+        }
+      },
+      { rootMargin: "400px", threshold: 0 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []); // intentionally empty — refs handle freshness
 
   const clearAll = useCallback(() => {
     setSelectedAmenities([]);
@@ -108,7 +148,9 @@ export default function Marketplace() {
   }, []);
 
   const allRaw = useMemo(() => {
-    return (data?.pages ?? []).flatMap((page) => (page?.data ?? []).map(transformProperty));
+    return (data?.pages ?? []).flatMap((page) =>
+      (page?.data ?? []).map(transformProperty)
+    );
   }, [data]);
 
   const filtered = useMemo(() => {
@@ -137,24 +179,6 @@ export default function Marketplace() {
   }, [allRaw, bedroomFilter, selectedAmenities, sortBy]);
 
   const total = data?.pages?.[0]?.pagination?.total ?? filtered.length;
-
-  // Intersection observer — trigger 500px before sentinel is visible
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-          fetchNextPage();
-        }
-      },
-      { rootMargin: "500px" }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const gridClass = viewMode === "grid"
     ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"
@@ -232,7 +256,6 @@ export default function Marketplace() {
 
           <div className="flex-1 min-w-0">
             {isLoading ? (
-              // Initial full-page skeleton
               <div className={`grid gap-5 ${gridClass}`}>
                 {Array.from({ length: ITEMS_PER_PAGE }).map((_, i) => (
                   <PropertySkeleton key={i} />
@@ -241,48 +264,57 @@ export default function Marketplace() {
             ) : isError ? (
               <div className="text-center py-20">
                 <div className="text-6xl mb-4">⚠️</div>
-                <h3 className="font-heading text-xl font-semibold text-foreground mb-2">Could not load properties</h3>
-                <p className="text-sm text-muted-foreground font-body">Please check your connection and try again</p>
+                <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
+                  Could not load properties
+                </h3>
+                <p className="text-sm text-muted-foreground font-body">
+                  Please check your connection and try again
+                </p>
               </div>
             ) : filtered.length === 0 ? (
               <div className="text-center py-20">
                 <div className="text-6xl mb-4">🏠</div>
-                <h3 className="font-heading text-xl font-semibold text-foreground mb-2">No properties found</h3>
-                <p className="text-sm text-muted-foreground font-body">Try adjusting your filters or search query</p>
-                <button onClick={clearAll} className="mt-4 text-sm text-secondary font-body hover:underline">
+                <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
+                  No properties found
+                </h3>
+                <p className="text-sm text-muted-foreground font-body">
+                  Try adjusting your filters or search query
+                </p>
+                <button
+                  onClick={clearAll}
+                  className="mt-4 text-sm text-secondary font-body hover:underline"
+                >
                   Clear all filters
                 </button>
               </div>
             ) : (
-              <>
-                <div className={`grid gap-5 ${gridClass}`}>
-                  {filtered.map((property, i) => (
-                    <div
-                      key={`${property.id}-${i}`}
-                      className="animate-fade-in"
-                      style={{ animationDelay: `${Math.min(i % ITEMS_PER_PAGE, 8) * 60}ms` }}
-                    >
-                      <PropertyCard property={property} />
-                    </div>
-                  ))}
+              <div className={`grid gap-5 ${gridClass}`}>
+                {filtered.map((property, i) => (
+                  <div
+                    key={`${property.id}-${i}`}
+                    className="animate-fade-in"
+                    style={{ animationDelay: `${Math.min(i % ITEMS_PER_PAGE, 8) * 60}ms` }}
+                  >
+                    <PropertyCard property={property} />
+                  </div>
+                ))}
 
-                  {/* Ghost skeletons while loading next page — appear inline in grid */}
-                  {isFetchingNextPage &&
-                    Array.from({ length: 3 }).map((_, i) => (
-                      <PropertySkeleton key={`skel-${i}`} />
-                    ))
-                  }
-                </div>
+                {/* Inline ghost skeletons while loading more */}
+                {isFetchingNextPage &&
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <PropertySkeleton key={`skel-${i}`} />
+                  ))
+                }
+              </div>
+            )}
 
-                {/* Sentinel — positioned after cards, triggers fetch when in viewport */}
-                <div ref={sentinelRef} className="h-1" />
+            {/* Sentinel is ALWAYS in the DOM so the observer can attach on mount */}
+            <div ref={sentinelRef} className="h-1 w-full" aria-hidden />
 
-                {!hasNextPage && filtered.length > 0 && (
-                  <p className="text-center text-xs text-muted-foreground font-body mt-8 pb-4">
-                    You've seen all {total} properties
-                  </p>
-                )}
-              </>
+            {!isLoading && !hasNextPage && filtered.length > 0 && (
+              <p className="text-center text-xs text-muted-foreground font-body mt-8 pb-4">
+                You've seen all {total} properties
+              </p>
             )}
           </div>
         </div>
