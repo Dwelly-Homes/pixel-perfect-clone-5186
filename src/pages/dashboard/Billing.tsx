@@ -12,7 +12,7 @@ export default function Billing() {
   const { data: overviewData, isLoading: overviewLoading } = useQuery({
     queryKey: ["billingOverview"],
     queryFn: async () => {
-      const { data } = await api.get("/payment/billing/overview");
+      const { data } = await api.get("/payments/billing/overview");
       return data.data;
     },
   });
@@ -20,7 +20,7 @@ export default function Billing() {
   const { data: historyData } = useQuery({
     queryKey: ["billingHistory"],
     queryFn: async () => {
-      const { data } = await api.get("/payment/billing/history?limit=5");
+      const { data } = await api.get("/payments/billing/history?limit=5");
       return data.data || [];
     },
   });

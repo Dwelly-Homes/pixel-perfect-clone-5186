@@ -19,6 +19,7 @@ import {
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import type { UserRole } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -36,25 +37,27 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const mainNav = [
+type NavItem = { title: string; url: string; icon: React.ElementType; roles?: UserRole[] };
+
+const mainNav: NavItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "My Properties", url: "/dashboard/properties", icon: Building2 },
-  { title: "Add Property", url: "/dashboard/properties/new", icon: Plus },
-  { title: "Inquiries", url: "/dashboard/inquiries", icon: MessageSquare },
-  { title: "Viewings", url: "/dashboard/viewings", icon: Calendar },
+  { title: "My Properties", url: "/dashboard/properties", icon: Building2, roles: ["tenant_admin", "agent_staff"] },
+  { title: "Add Property", url: "/dashboard/properties/new", icon: Plus, roles: ["tenant_admin", "agent_staff"] },
+  { title: "Inquiries", url: "/dashboard/inquiries", icon: MessageSquare, roles: ["tenant_admin", "agent_staff"] },
+  { title: "Viewings", url: "/dashboard/viewings", icon: Calendar, roles: ["tenant_admin", "agent_staff"] },
   { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
 ];
 
-const manageNav = [
-  { title: "Team", url: "/dashboard/team", icon: Users },
-  { title: "Commissions", url: "/dashboard/commissions", icon: DollarSign },
-  { title: "Verification", url: "/dashboard/verification", icon: ShieldCheck },
-  { title: "Billing", url: "/dashboard/billing", icon: CreditCard },
-  { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3 },
+const manageNav: NavItem[] = [
+  { title: "Team", url: "/dashboard/team", icon: Users, roles: ["tenant_admin"] },
+  { title: "Commissions", url: "/dashboard/commissions", icon: DollarSign, roles: ["tenant_admin"] },
+  { title: "Verification", url: "/dashboard/verification", icon: ShieldCheck, roles: ["tenant_admin"] },
+  { title: "Billing", url: "/dashboard/billing", icon: CreditCard, roles: ["tenant_admin"] },
+  { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3, roles: ["tenant_admin"] },
 ];
 
-const settingsNav = [
-  { title: "Organization", url: "/dashboard/settings/organization", icon: Building },
+const settingsNav: NavItem[] = [
+  { title: "Organization", url: "/dashboard/settings/organization", icon: Building, roles: ["tenant_admin"] },
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ];
 
@@ -63,7 +66,12 @@ export function DashboardSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+
+  const canSee = (item: NavItem) => !item.roles || item.roles.includes(user?.role as UserRole);
+  const visibleMain = mainNav.filter(canSee);
+  const visibleManage = manageNav.filter(canSee);
+  const visibleSettings = settingsNav.filter(canSee);
 
   const handleLogout = async () => {
     try {
@@ -105,7 +113,7 @@ export function DashboardSidebar() {
           <SidebarGroupLabel>Menu</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNav.map((item) => (
+              {visibleMain.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -123,29 +131,32 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator />
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Manage</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {manageNav.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.url)}
-                    tooltip={item.title}
-                  >
-                    <NavLink to={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {visibleManage.length > 0 && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupLabel>Manage</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {visibleManage.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive(item.url)}
+                        tooltip={item.title}
+                      >
+                        <NavLink to={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
 
         <SidebarSeparator />
 
@@ -153,7 +164,7 @@ export function DashboardSidebar() {
           <SidebarGroupLabel>Settings</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {settingsNav.map((item) => (
+              {visibleSettings.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
