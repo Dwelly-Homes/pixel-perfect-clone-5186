@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Home, Lock, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -13,7 +14,10 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ password: "", confirm: "" });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Extract token from URL query param
+  const token = new URLSearchParams(window.location.search).get("token") || "";
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (form.password.length < 8) {
       toast.error("Password must be at least 8 characters");
@@ -23,12 +27,20 @@ export default function ResetPassword() {
       toast.error("Passwords do not match");
       return;
     }
+    if (!token) {
+      toast.error("Invalid or missing reset token");
+      return;
+    }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await api.patch("/auth/reset-password", { token, newPassword: form.password });
       toast.success("Password updated! You can now sign in.");
       navigate("/login");
-    }, 1000);
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

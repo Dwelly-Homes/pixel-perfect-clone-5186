@@ -9,9 +9,18 @@ import {
   Settings,
   LogOut,
   ChevronLeft,
+  Calendar,
+  ShieldCheck,
+  CreditCard,
+  DollarSign,
+  Building,
+  UserPlus,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import {
   Sidebar,
   SidebarContent,
@@ -32,12 +41,20 @@ const mainNav = [
   { title: "My Properties", url: "/dashboard/properties", icon: Building2 },
   { title: "Add Property", url: "/dashboard/properties/new", icon: Plus },
   { title: "Inquiries", url: "/dashboard/inquiries", icon: MessageSquare },
+  { title: "Viewings", url: "/dashboard/viewings", icon: Calendar },
   { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
 ];
 
 const manageNav = [
-  { title: "Tenants", url: "/dashboard/tenants", icon: Users },
+  { title: "Team", url: "/dashboard/team", icon: Users },
+  { title: "Commissions", url: "/dashboard/commissions", icon: DollarSign },
+  { title: "Verification", url: "/dashboard/verification", icon: ShieldCheck },
+  { title: "Billing", url: "/dashboard/billing", icon: CreditCard },
   { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3 },
+];
+
+const settingsNav = [
+  { title: "Organization", url: "/dashboard/settings/organization", icon: Building },
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ];
 
@@ -45,6 +62,18 @@ export function DashboardSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      const refreshToken = localStorage.getItem("refreshToken");
+      await api.post("/auth/logout", { refreshToken });
+    } catch { /* ignore */ }
+    logout();
+    toast.success("Signed out successfully");
+    navigate("/login");
+  };
 
   const isActive = (path: string) =>
     path === "/dashboard"
@@ -117,6 +146,30 @@ export function DashboardSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarSeparator />
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Settings</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {settingsNav.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter>
@@ -131,11 +184,9 @@ export function DashboardSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Sign Out" asChild>
-              <NavLink to="/login">
-                <LogOut className="h-4 w-4" />
-                <span>Sign Out</span>
-              </NavLink>
+            <SidebarMenuButton tooltip="Sign Out" onClick={handleLogout}>
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

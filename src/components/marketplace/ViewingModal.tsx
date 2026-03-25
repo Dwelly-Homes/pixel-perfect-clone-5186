@@ -4,10 +4,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
 
 interface ViewingModalProps {
   open: boolean;
   onClose: () => void;
+  propertyId: string;
   propertyTitle: string;
 }
 
@@ -17,9 +19,10 @@ const TIME_SLOTS = [
   { label: "Evening (5pm–7pm)", value: "evening" },
 ];
 
-export function ViewingModal({ open, onClose, propertyTitle }: ViewingModalProps) {
+export function ViewingModal({ open, onClose, propertyId, propertyTitle }: ViewingModalProps) {
   const [date, setDate] = useState("");
   const [timeSlot, setTimeSlot] = useState("");
+  const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -30,10 +33,23 @@ export function ViewingModal({ open, onClose, propertyTitle }: ViewingModalProps
     e.preventDefault();
     if (!date || !timeSlot || !phone) return;
     setSubmitting(true);
-    await new Promise(r => setTimeout(r, 1000));
-    setSubmitting(false);
-    toast.success("Viewing request submitted! You'll be contacted to confirm.");
-    onClose();
+    try {
+      await api.post("/inquiries", {
+        propertyId,
+        inquiryType: "viewing_request",
+        senderName: name || "Anonymous",
+        senderPhone: `+254${phone.replace(/^0/, "")}`,
+        message: `Viewing request for: ${propertyTitle}`,
+        requestedDate: new Date(date).toISOString(),
+        requestedTimeSlot: timeSlot,
+      });
+      toast.success("Viewing request submitted! You'll be contacted to confirm.");
+      onClose();
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -47,17 +63,21 @@ export function ViewingModal({ open, onClose, propertyTitle }: ViewingModalProps
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <Label className="font-body">Your Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="mt-1" />
+          </div>
+          <div>
             <Label className="font-body flex items-center gap-2">
               <Calendar className="h-4 w-4" /> Preferred Date *
             </Label>
-            <Input type="date" min={today} max={maxDate} value={date} onChange={e => setDate(e.target.value)} required className="mt-1" />
+            <Input type="date" min={today} max={maxDate} value={date} onChange={(e) => setDate(e.target.value)} required className="mt-1" />
           </div>
           <div>
             <Label className="font-body flex items-center gap-2">
               <Clock className="h-4 w-4" /> Time Slot *
             </Label>
             <div className="grid grid-cols-1 gap-2 mt-2">
-              {TIME_SLOTS.map(slot => (
+              {TIME_SLOTS.map((slot) => (
                 <button
                   key={slot.value}
                   type="button"
@@ -77,7 +97,7 @@ export function ViewingModal({ open, onClose, propertyTitle }: ViewingModalProps
             <Label className="font-body">Phone Number *</Label>
             <div className="flex mt-1">
               <span className="flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">+254</span>
-              <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="7XX XXX XXX" required className="rounded-l-none" />
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="7XX XXX XXX" required className="rounded-l-none" />
             </div>
           </div>
           <button

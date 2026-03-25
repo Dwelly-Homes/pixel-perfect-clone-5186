@@ -77,42 +77,12 @@ export default function TenantPayments() {
   const pendingAmount = upcomingPayments.reduce((sum, p) => sum + p.amount, 0);
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Top Nav */}
-      <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <Home className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="font-heading font-bold text-lg text-foreground">Dwelly Homes</span>
-          </Link>
-          <nav className="hidden md:flex items-center gap-1">
-            <Link to="/tenant" className="px-3 py-2 rounded-md text-sm font-body text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
-            <Link to="/tenant/payments" className="px-3 py-2 rounded-md text-sm font-body font-medium bg-secondary/10 text-secondary">Payments</Link>
-            <Link to="/tenant/bookings" className="px-3 py-2 rounded-md text-sm font-body text-muted-foreground hover:text-foreground transition-colors">Bookings</Link>
-          </nav>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-[10px] text-destructive-foreground flex items-center justify-center font-bold">2</span>
-            </Button>
-            <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-body font-bold text-sm">JM</div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" asChild>
-              <Link to="/tenant"><ArrowLeft className="h-5 w-5" /></Link>
-            </Button>
-            <div>
-              <h1 className="font-heading text-2xl font-bold text-foreground">Payments</h1>
-              <p className="text-muted-foreground font-body text-sm">Manage rent payments via M-Pesa</p>
-            </div>
+          <div>
+            <h1 className="font-heading text-2xl font-bold text-foreground">Payments</h1>
+            <p className="text-muted-foreground font-body text-sm">Manage your rent payments via M-Pesa</p>
           </div>
           <Button className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-[hsl(var(--success-foreground))] font-body gap-2" onClick={openPayModal}>
             <Smartphone className="h-4 w-4" />
@@ -234,7 +204,6 @@ export default function TenantPayments() {
             </TabsContent>
           ))}
         </Tabs>
-      </main>
 
       {/* M-Pesa Payment Modal */}
       <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>

@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft, ArrowRight, Home, Building2, Briefcase } from "lucide-react";
 import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
 
 type AccountType = "tenant" | "landlord" | "agent";
 
@@ -55,7 +56,14 @@ export default function Register() {
     return false;
   };
 
-  const handleSubmit = () => {
+  // Map frontend account type labels to backend AccountType enum values
+  const accountTypeMap: Record<AccountType, string> = {
+    tenant: "searcher",
+    landlord: "landlord",
+    agent: "estate_agent",
+  };
+
+  const handleSubmit = async () => {
     if (!canNext()) {
       toast.error("Please fill in all required fields");
       return;
@@ -65,10 +73,21 @@ export default function Register() {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const { data } = await api.post("/auth/register", {
+        fullName: `${form.firstName} ${form.lastName}`,
+        email: form.email,
+        phone: form.phone,
+        password: form.password,
+        accountType: accountTypeMap[form.accountType],
+      });
+      toast.success("Account created! Please verify your phone number.");
+      navigate("/verify-otp", { state: { phone: data.data.phone, email: form.email } });
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
       setLoading(false);
-      navigate("/verify-otp", { state: { email: form.email } });
-    }, 1000);
+    }
   };
 
   return (

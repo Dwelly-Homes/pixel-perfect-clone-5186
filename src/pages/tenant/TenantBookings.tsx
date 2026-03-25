@@ -99,27 +99,11 @@ export default function TenantBookings() {
   const filteredInquiries = statusFilter === "all" ? inquiries : inquiries.filter(i => i.status === statusFilter);
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Top Nav */}
-      <header className="sticky top-0 z-30 border-b bg-card">
-        <div className="max-w-7xl mx-auto flex items-center justify-between h-14 px-4">
-          <Link to="/tenant" className="flex items-center gap-2 text-primary font-heading font-bold text-lg">
-            <ArrowLeft className="h-4 w-4" /> My Bookings & Inquiries
-          </Link>
-          <div className="flex items-center gap-2">
-            {navItems.map(item => (
-              <Link key={item.label} to={item.href}>
-                <Button variant={item.active ? "default" : "ghost"} size="sm" className="gap-1.5 font-body text-xs">
-                  <item.icon className="h-4 w-4" />
-                  <span className="hidden sm:inline">{item.label}</span>
-                </Button>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-heading text-2xl font-bold">Bookings & Inquiries</h1>
+        <p className="text-sm text-muted-foreground mt-1">Manage your viewing requests and property inquiries.</p>
+      </div>
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
@@ -273,7 +257,6 @@ export default function TenantBookings() {
             })}
           </TabsContent>
         </Tabs>
-      </main>
     </div>
   );
 }

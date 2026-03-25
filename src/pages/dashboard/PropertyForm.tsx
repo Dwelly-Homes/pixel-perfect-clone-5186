@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Upload, X, Save, Eye } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { ArrowLeft, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,41 +17,141 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { mockProperties, KENYAN_COUNTIES, PROPERTY_TYPES, AMENITIES_LIST } from "@/data/properties";
+import { KENYAN_COUNTIES } from "@/data/properties";
 import { toast } from "sonner";
+import { api, getApiError } from "@/lib/api";
+
+// Backend property type enum values and their display labels
+const PROPERTY_TYPES = [
+  { value: "bedsitter", label: "Bedsitter" },
+  { value: "studio", label: "Studio" },
+  { value: "1_bedroom", label: "1 Bedroom" },
+  { value: "2_bedroom", label: "2 Bedroom" },
+  { value: "3_bedroom", label: "3 Bedroom" },
+  { value: "4_plus_bedroom", label: "4+ Bedroom" },
+  { value: "maisonette", label: "Maisonette" },
+  { value: "bungalow", label: "Bungalow" },
+  { value: "townhouse", label: "Townhouse" },
+  { value: "commercial", label: "Commercial" },
+];
+
+// Backend amenity keys and their display labels
+const AMENITIES = [
+  { key: "water", label: "Water Supply" },
+  { key: "electricity", label: "Electricity" },
+  { key: "parking", label: "Parking" },
+  { key: "security", label: "Security/Guard" },
+  { key: "cctv", label: "CCTV" },
+  { key: "borehole", label: "Borehole" },
+  { key: "pool", label: "Swimming Pool" },
+  { key: "gym", label: "Gym" },
+  { key: "generator", label: "Backup Generator" },
+  { key: "balcony", label: "Balcony" },
+  { key: "garden", label: "Garden/Compound" },
+  { key: "furnished", label: "Furnished" },
+  { key: "wifi", label: "WiFi/Internet" },
+  { key: "pet_friendly", label: "Pet Friendly" },
+  { key: "dsq", label: "DSQ (Servant Quarter)" },
+  { key: "intercom", label: "Intercom" },
+];
 
 export default function PropertyForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = Boolean(id);
-  const existing = isEditing ? mockProperties.find((p) => p.id === id) : null;
 
-  const [title, setTitle] = useState(existing?.title ?? "");
-  const [description, setDescription] = useState(existing?.description ?? "");
-  const [type, setType] = useState(existing?.type ?? "");
-  const [bedrooms, setBedrooms] = useState(String(existing?.bedrooms ?? ""));
-  const [price, setPrice] = useState(String(existing?.price ?? ""));
-  const [neighborhood, setNeighborhood] = useState(existing?.location.neighborhood ?? "");
-  const [county, setCounty] = useState(existing?.location.county ?? "");
-  const [status, setStatus] = useState(existing?.status ?? "available");
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(existing?.amenities ?? []);
-  const [images] = useState<string[]>(existing?.images ?? []);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [propertyType, setPropertyType] = useState("");
+  const [price, setPrice] = useState("");
+  const [serviceCharge, setServiceCharge] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [county, setCounty] = useState("");
+  const [status, setStatus] = useState("available");
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
 
-  const toggleAmenity = (amenity: string) => {
+  // Load existing property for editing
+  const { data: editData, isLoading: loadingProperty } = useQuery({
+    queryKey: ["editProperty", id],
+    enabled: isEditing,
+    queryFn: async () => {
+      const { data } = await api.get(`/properties/${id}`);
+      return data.data;
+    },
+  });
+
+  useEffect(() => {
+    if (editData) {
+      setTitle(editData.title || "");
+      setDescription(editData.description || "");
+      setPropertyType(editData.propertyType || "");
+      setPrice(String(editData.monthlyRent || ""));
+      setServiceCharge(String(editData.serviceCharge || ""));
+      setNeighborhood(editData.neighborhood || "");
+      setCounty(editData.county || "");
+      setStatus(editData.status || "available");
+      setSelectedAmenities(editData.amenities || []);
+    }
+  }, [editData]);
+
+  const createMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.post("/properties", body),
+    onSuccess: () => {
+      toast.success("Property created successfully!");
+      navigate("/dashboard/properties");
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.patch(`/properties/${id}`, body),
+    onSuccess: () => {
+      toast.success("Property updated successfully!");
+      navigate("/dashboard/properties");
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  const toggleAmenity = (key: string) => {
     setSelectedAmenities((prev) =>
-      prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
+      prev.includes(key) ? prev.filter((a) => a !== key) : [...prev, key]
     );
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !type || !price || !neighborhood || !county) {
+    if (!title.trim() || !propertyType || !price || !neighborhood || !county) {
       toast.error("Please fill in all required fields");
       return;
     }
-    toast.success(isEditing ? "Property updated successfully!" : "Property created successfully!");
-    navigate("/dashboard/properties");
+    const body = {
+      title: title.trim(),
+      description: description.trim(),
+      propertyType,
+      monthlyRent: Number(price),
+      serviceCharge: serviceCharge ? Number(serviceCharge) : 0,
+      neighborhood: neighborhood.trim(),
+      county,
+      status,
+      amenities: selectedAmenities,
+    };
+    if (isEditing) {
+      updateMutation.mutate(body);
+    } else {
+      createMutation.mutate(body);
+    }
   };
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+
+  if (isEditing && loadingProperty) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto space-y-6">
+        <div className="h-8 bg-muted rounded w-48 animate-pulse" />
+        <div className="h-64 bg-muted rounded animate-pulse" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -71,7 +172,6 @@ export default function PropertyForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Info */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-heading">Basic Information</CardTitle>
@@ -95,46 +195,35 @@ export default function PropertyForm() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
-                maxLength={1000}
+                maxLength={2000}
               />
-              <p className="text-xs text-muted-foreground text-right">{description.length}/1000</p>
+              <p className="text-xs text-muted-foreground text-right">{description.length}/2000</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Property Type *</Label>
-                <Select value={type} onValueChange={setType}>
+                <Select value={propertyType} onValueChange={setPropertyType}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {PROPERTY_TYPES.filter((t) => t !== "All").map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    {PROPERTY_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="bedrooms">Bedrooms</Label>
-                <Input
-                  id="bedrooms"
-                  type="number"
-                  min="0"
-                  max="10"
-                  placeholder="0"
-                  value={bedrooms}
-                  onChange={(e) => setBedrooms(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+                <Select value={status} onValueChange={setStatus}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="available">Available</SelectItem>
                     <SelectItem value="occupied">Occupied</SelectItem>
-                    <SelectItem value="under-maintenance">Under Maintenance</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="under_maintenance">Under Maintenance</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -142,7 +231,6 @@ export default function PropertyForm() {
           </CardContent>
         </Card>
 
-        {/* Location & Pricing */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-heading">Location & Pricing</CardTitle>
@@ -173,109 +261,93 @@ export default function PropertyForm() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="price">Monthly Rent (KES) *</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                  KES
-                </span>
-                <Input
-                  id="price"
-                  type="number"
-                  min="0"
-                  step="500"
-                  placeholder="0"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="pl-12"
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="price">Monthly Rent (KES) *</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">KES</span>
+                  <Input
+                    id="price"
+                    type="number"
+                    min="0"
+                    step="500"
+                    placeholder="0"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="pl-12"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="serviceCharge">Service Charge (KES)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">KES</span>
+                  <Input
+                    id="serviceCharge"
+                    type="number"
+                    min="0"
+                    step="500"
+                    placeholder="0"
+                    value={serviceCharge}
+                    onChange={(e) => setServiceCharge(e.target.value)}
+                    className="pl-12"
+                  />
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Amenities */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-heading">Amenities</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {AMENITIES_LIST.map((amenity) => (
+              {AMENITIES.map((amenity) => (
                 <label
-                  key={amenity}
+                  key={amenity.key}
                   className="flex items-center gap-2 cursor-pointer text-sm hover:text-foreground transition-colors"
                 >
                   <Checkbox
-                    checked={selectedAmenities.includes(amenity)}
-                    onCheckedChange={() => toggleAmenity(amenity)}
+                    checked={selectedAmenities.includes(amenity.key)}
+                    onCheckedChange={() => toggleAmenity(amenity.key)}
                   />
-                  <span className={selectedAmenities.includes(amenity) ? "text-foreground font-medium" : "text-muted-foreground"}>
-                    {amenity}
+                  <span className={selectedAmenities.includes(amenity.key) ? "text-foreground font-medium" : "text-muted-foreground"}>
+                    {amenity.label}
                   </span>
                 </label>
               ))}
             </div>
             {selectedAmenities.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-1.5">
-                {selectedAmenities.map((a) => (
-                  <Badge key={a} variant="secondary" className="gap-1 cursor-pointer" onClick={() => toggleAmenity(a)}>
-                    {a}
-                    <X className="h-3 w-3" />
-                  </Badge>
-                ))}
+                {selectedAmenities.map((key) => {
+                  const amenity = AMENITIES.find((a) => a.key === key);
+                  return (
+                    <Badge key={key} variant="secondary" className="gap-1 cursor-pointer" onClick={() => toggleAmenity(key)}>
+                      {amenity?.label || key}
+                      <span className="ml-0.5">×</span>
+                    </Badge>
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Photos */}
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-heading">Photos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {images.map((img, i) => (
-                <div key={i} className="relative group aspect-[4/3] rounded-lg overflow-hidden border">
-                  <img src={img} alt={`Property photo ${i + 1}`} className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-foreground/60 text-background flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => toast.info("Photo upload requires Lovable Cloud")}
-                className="aspect-[4/3] rounded-lg border-2 border-dashed border-muted-foreground/25 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-secondary hover:text-secondary transition-colors"
-              >
-                <Upload className="h-6 w-6" />
-                <span className="text-xs font-medium">Add Photo</span>
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-
         <Separator />
 
-        {/* Actions */}
         <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
           <Button type="button" variant="outline" asChild>
             <Link to="/dashboard/properties">Cancel</Link>
           </Button>
-          <div className="flex gap-3 w-full sm:w-auto">
-            <Button type="button" variant="outline" className="flex-1 sm:flex-initial" onClick={() => toast.info("Preview coming soon")}>
-              <Eye className="h-4 w-4 mr-2" />
-              Preview
-            </Button>
-            <Button type="submit" className="flex-1 sm:flex-initial bg-secondary hover:bg-orange-dark text-secondary-foreground">
-              <Save className="h-4 w-4 mr-2" />
-              {isEditing ? "Save Changes" : "Publish Listing"}
-            </Button>
-          </div>
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary hover:bg-orange-dark text-secondary-foreground">
+            {isSubmitting ? (
+              <span className="flex items-center gap-2"><span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{isEditing ? "Saving…" : "Publishing…"}</span>
+            ) : (
+              <span className="flex items-center gap-2"><Save className="h-4 w-4" />{isEditing ? "Save Changes" : "Publish Listing"}</span>
+            )}
+          </Button>
         </div>
       </form>
     </div>
