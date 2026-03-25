@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, List, CheckCircle, X, Clock, Phone, Home, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ export default function Viewings() {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<"calendar" | "list">("calendar");
   const [filter, setFilter] = useState("All");
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
   const [calMonth, setCalMonth] = useState(today.getMonth());
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate());
@@ -43,12 +43,13 @@ export default function Viewings() {
     queryKey: ["viewings"],
     queryFn: async () => {
       const { data } = await api.get("/inquiries?limit=100");
-      // Filter only viewing_request type
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const all = data?.data || [];
+      const all = data?.data?.inquiries || [];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return all.filter((i: any) => i.inquiryType === "viewing_request");
     },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const updateMutation = useMutation({
@@ -65,8 +66,6 @@ export default function Viewings() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function getDisplayStatus(v: any): string {
-    // If status is closed, check if it was previously confirmed (responded) - treat as Completed
-    // Otherwise, use the mapping
     return statusToDisplay[v.status] || v.status;
   }
 
@@ -75,25 +74,29 @@ export default function Viewings() {
     return v.requestedDate ? new Date(v.requestedDate).toISOString().split("T")[0] : "";
   }
 
-  const upcoming = rawViewings.filter((v) => {
-    const d = getDateStr(v);
-    return d && new Date(d) >= new Date(today.toDateString());
-  });
+  const todayStr = today.toDateString();
 
-  const thisWeekUpcoming = upcoming.filter((v) => {
-    const d = new Date(getDateStr(v));
-    const diff = (d.getTime() - today.getTime()) / 86400000;
-    return diff <= 7;
-  });
+  const thisWeekUpcoming = useMemo(() => {
+    return rawViewings.filter((v) => {
+      const d = getDateStr(v);
+      if (!d) return false;
+      const diff = (new Date(d).getTime() - today.getTime()) / 86400000;
+      return diff >= 0 && diff <= 7;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawViewings, todayStr]);
 
-  const filtered = rawViewings.filter((v) => {
-    const d = getDateStr(v);
-    if (!d) return filter === "All";
-    const past = new Date(d) < new Date(today.toDateString());
-    if (filter === "Upcoming") return !past;
-    if (filter === "Past") return past;
-    return true;
-  });
+  const filtered = useMemo(() => {
+    return rawViewings.filter((v) => {
+      const d = getDateStr(v);
+      if (!d) return filter === "All";
+      const past = new Date(d) < new Date(todayStr);
+      if (filter === "Upcoming") return !past;
+      if (filter === "Past") return past;
+      return true;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawViewings, filter, todayStr]);
 
   function confirmViewing(id: string) {
     updateMutation.mutate({ id, status: "responded" });
