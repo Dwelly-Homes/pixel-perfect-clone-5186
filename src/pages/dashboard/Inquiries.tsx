@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, MessageSquare, Phone, Mail, Home, Clock, CheckCircle, X } from "lucide-react";
+import { Search, MessageSquare, Phone, Mail, Home, Clock, CheckCircle, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { api, getApiError } from "@/lib/api";
+
+const LIMIT = 20;
 
 const statusColor: Record<string, string> = {
   new: "bg-blue-100 text-blue-800",
@@ -28,6 +30,12 @@ const typeLabel: Record<string, string> = {
   booking_intent: "Booking Intent",
 };
 
+const STATUS_PARAM: Record<string, string> = {
+  New: "new",
+  Responded: "responded",
+  Closed: "closed",
+};
+
 const tabs = ["All", "New", "Responded", "Closed"];
 
 function timeAgo(dateStr: string) {
@@ -43,13 +51,16 @@ export default function Inquiries() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("All");
+  const [page, setPage] = useState(1);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selected, setSelected] = useState<any | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["inquiries"],
+    queryKey: ["inquiries", tab, page],
     queryFn: async () => {
-      const { data } = await api.get("/inquiries?limit=100");
+      const params = new URLSearchParams({ limit: String(LIMIT), page: String(page) });
+      if (tab !== "All") params.set("status", STATUS_PARAM[tab]);
+      const { data } = await api.get(`/inquiries?${params.toString()}`);
       return data;
     },
   });
@@ -65,14 +76,17 @@ export default function Inquiries() {
   });
 
   const rawInquiries = data?.data || [];
+  const total: number = data?.meta?.total ?? 0;
+  const totalPages: number = data?.meta?.totalPages ?? 1;
 
-  const filtered = rawInquiries.filter((i: { status: string; senderName: string; senderPhone: string; propertyId: { title: string } | null }) => {
-    const matchTab = tab === "All" || i.status === tab.toLowerCase();
-    const matchSearch =
+  // Client-side search within current page
+  const filtered = rawInquiries.filter((i: { senderName: string; senderPhone: string; propertyId: { title: string } | null }) => {
+    if (!search) return true;
+    return (
       i.senderName?.toLowerCase().includes(search.toLowerCase()) ||
       i.senderPhone?.includes(search) ||
-      (i.propertyId && typeof i.propertyId === "object" && (i.propertyId as { title: string }).title?.toLowerCase().includes(search.toLowerCase()));
-    return matchTab && matchSearch;
+      (i.propertyId && typeof i.propertyId === "object" && (i.propertyId as { title: string }).title?.toLowerCase().includes(search.toLowerCase()))
+    );
   });
 
   const markResponded = (id: string) => {
@@ -99,7 +113,7 @@ export default function Inquiries() {
             {tabs.map((t) => (
               <button
                 key={t}
-                onClick={() => setTab(t)}
+                onClick={() => { setTab(t); setPage(1); setSelected(null); }}
                 className={cn("px-2.5 py-1 rounded-full text-xs font-medium transition-colors", tab === t ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground")}
               >
                 {t}
@@ -147,6 +161,21 @@ export default function Inquiries() {
             ))
           )}
         </div>
+        {/* Pagination footer */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-3 py-2 border-t text-xs text-muted-foreground shrink-0">
+            <span>{total} total</span>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                <ChevronLeft className="h-3 w-3" />
+              </Button>
+              <span>{page}/{totalPages}</span>
+              <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                <ChevronRight className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right panel */}

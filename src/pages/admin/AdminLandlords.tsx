@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, Eye, UserX, UserCheck } from "lucide-react";
+import { Search, Eye, UserX, UserCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { api, getApiError } from "@/lib/api";
 
+const LIMIT = 15;
 const TABS = ["All", "active", "suspended", "pending_verification"] as const;
 const TAB_LABELS: Record<string, string> = {
   All: "All",
@@ -28,11 +29,12 @@ export default function AdminLandlords() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<typeof TABS[number]>("All");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["adminLandlords", tab],
+    queryKey: ["adminLandlords", tab, search, page],
     queryFn: async () => {
-      const params = new URLSearchParams({ accountType: "landlord", limit: "50" });
+      const params = new URLSearchParams({ accountType: "landlord", limit: String(LIMIT), page: String(page) });
       if (tab !== "All") params.set("status", tab);
       if (search) params.set("search", search);
       const { data } = await api.get(`/tenants?${params.toString()}`);
@@ -52,13 +54,8 @@ export default function AdminLandlords() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const landlords: any[] = data?.data || [];
-  const total = data?.pagination?.total ?? 0;
-
-  const filtered = landlords.filter((l) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return l.businessName?.toLowerCase().includes(q) || l.contactEmail?.toLowerCase().includes(q);
-  });
+  const total: number = data?.meta?.total ?? 0;
+  const totalPages: number = data?.meta?.totalPages ?? 1;
 
   return (
     <div className="p-6 space-y-6 max-w-6xl">
@@ -85,7 +82,7 @@ export default function AdminLandlords() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1.5">
           {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)}
+            <button key={t} onClick={() => { setTab(t); setPage(1); }}
               className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
                 tab === t ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground"
               )}>
@@ -95,7 +92,12 @@ export default function AdminLandlords() {
         </div>
         <div className="relative ml-auto">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input placeholder="Search landlords…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-xs w-60" />
+          <Input
+            placeholder="Search landlords…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="pl-8 h-8 text-xs w-60"
+          />
         </div>
       </div>
 
@@ -116,11 +118,11 @@ export default function AdminLandlords() {
                     <td colSpan={7} className="px-4 py-3"><div className="h-4 bg-muted rounded animate-pulse" /></td>
                   </tr>
                 ))
-              ) : filtered.length === 0 ? (
+              ) : landlords.length === 0 ? (
                 <tr><td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">No landlords found.</td></tr>
               ) : (
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                filtered.map((l: any) => (
+                landlords.map((l: any) => (
                   <tr key={l._id} className="border-b last:border-0 hover:bg-muted/20">
                     <td className="px-4 py-3">
                       <p className="text-xs font-medium">{l.businessName || "—"}</p>
@@ -168,6 +170,20 @@ export default function AdminLandlords() {
               )}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t text-xs text-muted-foreground">
+              <span>{total} total · Page {page} of {totalPages}</span>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <span className="px-2">{page} / {totalPages}</span>
+                <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

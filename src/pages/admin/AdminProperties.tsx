@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, MapPin, TrendingUp } from "lucide-react";
+import { Search, MapPin, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+
+const LIMIT = 15;
 
 const statusColors: Record<string, string> = {
   available: "bg-blue-100 text-blue-700",
@@ -43,11 +46,12 @@ export default function AdminProperties() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["adminProperties", search, statusFilter, typeFilter],
+    queryKey: ["adminProperties", search, statusFilter, typeFilter, page],
     queryFn: async () => {
-      const params = new URLSearchParams({ limit: "100" });
+      const params = new URLSearchParams({ limit: String(LIMIT), page: String(page) });
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (typeFilter !== "all") params.set("propertyType", typeFilter);
@@ -58,14 +62,15 @@ export default function AdminProperties() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const properties: any[] = data?.data || [];
-  const total = data?.pagination?.total ?? 0;
+  const total: number = data?.meta?.total ?? 0;
+  const totalPages: number = data?.meta?.totalPages ?? 1;
 
   const occupied = properties.filter((p) => p.status === "occupied").length;
   const available = properties.filter((p) => p.status === "available").length;
-  const occupancyRate = total > 0 ? Math.round((occupied / total) * 100) : 0;
+  const occupancyRate = properties.length > 0 ? Math.round((occupied / properties.length) * 100) : 0;
   const totalRentRoll = properties.filter((p) => p.status === "occupied").reduce((s: number, p: { monthlyRent?: number }) => s + (p.monthlyRent || 0), 0);
 
-  // Area breakdown
+  // Area breakdown from current page data
   const areaMap: Record<string, { total: number; occupied: number }> = {};
   properties.forEach((p) => {
     const area = p.neighborhood || p.county || "Other";
@@ -88,9 +93,9 @@ export default function AdminProperties() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: "Total Listings", value: total },
-          { label: "Occupied", value: occupied, sub: `${occupancyRate}% occupancy rate` },
-          { label: "Available", value: available },
-          { label: "Monthly Rent Roll", value: `KES ${totalRentRoll.toLocaleString()}` },
+          { label: "Occupied (this page)", value: occupied, sub: `${occupancyRate}% of current page` },
+          { label: "Available (this page)", value: available },
+          { label: "Rent Roll (this page)", value: `KES ${totalRentRoll.toLocaleString()}` },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="p-4">
@@ -105,7 +110,7 @@ export default function AdminProperties() {
       {areaStats.length > 0 && (
         <Card>
           <CardContent className="p-4 space-y-3">
-            <p className="text-sm font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-muted-foreground" />Occupancy by Area (top 5)</p>
+            <p className="text-sm font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-muted-foreground" />Occupancy by Area (current page)</p>
             <div className="space-y-2.5">
               {areaStats.map((a) => (
                 <div key={a.area}>
@@ -124,9 +129,14 @@ export default function AdminProperties() {
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input placeholder="Search properties…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-xs w-56" />
+          <Input
+            placeholder="Search properties…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="pl-8 h-8 text-xs w-56"
+          />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
@@ -136,7 +146,7 @@ export default function AdminProperties() {
             <SelectItem value="under_maintenance">Maintenance</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
+        <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); }}>
           <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="Property type" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
@@ -150,7 +160,7 @@ export default function AdminProperties() {
             <SelectItem value="commercial">Commercial</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-xs text-muted-foreground ml-auto">{properties.length} properties shown</span>
+        <span className="text-xs text-muted-foreground ml-auto">{properties.length} shown of {total}</span>
       </div>
 
       <Card>
@@ -206,6 +216,20 @@ export default function AdminProperties() {
               )}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t text-xs text-muted-foreground">
+              <span>{total} total · Page {page} of {totalPages}</span>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <span className="px-2">{page} / {totalPages}</span>
+                <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, Eye, UserCheck, UserX, AlertTriangle } from "lucide-react";
+import { Search, Eye, UserCheck, UserX, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { api, getApiError } from "@/lib/api";
 
+const LIMIT = 15;
 const TABS = ["All", "active", "suspended", "pending_verification"] as const;
 const TAB_LABELS: Record<string, string> = {
   All: "All",
@@ -28,11 +29,12 @@ export default function AdminAgents() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<typeof TABS[number]>("All");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["adminAgents", tab],
+    queryKey: ["adminAgents", tab, page],
     queryFn: async () => {
-      const params = new URLSearchParams({ accountType: "estate_agent", limit: "50" });
+      const params = new URLSearchParams({ accountType: "estate_agent", limit: String(LIMIT), page: String(page) });
       if (tab !== "All") params.set("status", tab);
       const { data } = await api.get(`/tenants?${params.toString()}`);
       return data;
@@ -52,7 +54,8 @@ export default function AdminAgents() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const agents: any[] = data?.data || [];
-  const total = data?.pagination?.total ?? 0;
+  const total: number = data?.meta?.total ?? 0;
+  const totalPages: number = data?.meta?.totalPages ?? 1;
 
   const filtered = agents.filter((a) => {
     if (!search) return true;
@@ -87,7 +90,7 @@ export default function AdminAgents() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1.5">
           {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)}
+            <button key={t} onClick={() => { setTab(t); setPage(1); }}
               className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
                 tab === t ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground"
               )}>
@@ -184,6 +187,20 @@ export default function AdminAgents() {
               )}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t text-xs text-muted-foreground">
+              <span>{total} total · Page {page} of {totalPages}</span>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <span className="px-2">{page} / {totalPages}</span>
+                <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Eye, Clock, CheckCircle2, XCircle, AlertCircle, ShieldCheck } from "lucide-react";
+import { Search, Eye, Clock, CheckCircle2, XCircle, AlertCircle, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 
+const LIMIT = 15;
 type VerifStatus = "documents_uploaded" | "under_review" | "information_requested" | "approved" | "rejected" | "suspended" | "not_submitted";
 
 const TABS = ["All", "documents_uploaded", "under_review", "information_requested", "approved", "rejected", "suspended"] as const;
@@ -35,11 +36,12 @@ const statusConfig: Record<VerifStatus, { icon: React.ElementType; color: string
 export default function AdminVerifications() {
   const [tab, setTab] = useState<typeof TABS[number]>("All");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["adminVerifications", tab],
+    queryKey: ["adminVerifications", tab, page],
     queryFn: async () => {
-      const params = new URLSearchParams({ limit: "50" });
+      const params = new URLSearchParams({ limit: String(LIMIT), page: String(page) });
       if (tab !== "All") params.set("status", tab);
       const { data } = await api.get(`/verification/admin?${params.toString()}`);
       return data;
@@ -48,7 +50,8 @@ export default function AdminVerifications() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const items: any[] = data?.data || [];
-  const total = data?.pagination?.total ?? 0;
+  const total: number = data?.meta?.total ?? 0;
+  const totalPages: number = data?.meta?.totalPages ?? 1;
 
   const filtered = items.filter((i) => {
     if (!search) return true;
@@ -57,9 +60,6 @@ export default function AdminVerifications() {
     const q = search.toLowerCase();
     return name.includes(q) || email.includes(q);
   });
-
-  // Count by status for tab badges (from current fetched data)
-  const counts: Record<string, number> = { All: total };
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
@@ -75,7 +75,7 @@ export default function AdminVerifications() {
         {TABS.map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => { setTab(t); setPage(1); }}
             className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5",
               tab === t ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground"
             )}
@@ -85,11 +85,6 @@ export default function AdminVerifications() {
               <span className={cn("text-[10px] rounded-full px-1.5 py-0.5 font-bold",
                 tab === t ? "bg-white/20 text-white" : "bg-muted-foreground/20"
               )}>{total}</span>
-            )}
-            {counts[t] > 0 && t !== "All" && (
-              <span className={cn("text-[10px] rounded-full px-1.5 py-0.5 font-bold",
-                tab === t ? "bg-white/20 text-white" : "bg-muted-foreground/20"
-              )}>{counts[t]}</span>
             )}
           </button>
         ))}
@@ -166,6 +161,20 @@ export default function AdminVerifications() {
               )}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t text-xs text-muted-foreground">
+              <span>{total} total · Page {page} of {totalPages}</span>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <span className="px-2">{page} / {totalPages}</span>
+                <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

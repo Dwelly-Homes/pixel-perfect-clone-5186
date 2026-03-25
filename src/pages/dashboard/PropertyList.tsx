@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Plus, Search, MoreHorizontal, Pencil, Trash2, Eye, ArrowUpDown,
+  Plus, Search, MoreHorizontal, Pencil, Trash2, Eye, ArrowUpDown, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { api, getApiError } from "@/lib/api";
 import { transformProperty } from "@/lib/propertyTransform";
 
+const LIMIT = 15;
 const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60";
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -37,16 +38,18 @@ export default function PropertyList() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortField, setSortField] = useState<"monthlyRent" | "createdAt">("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["myProperties", search, statusFilter, sortField, sortDir],
+    queryKey: ["myProperties", search, statusFilter, sortField, sortDir, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
       params.set("sort", sortField);
       params.set("order", sortDir);
-      params.set("limit", "50");
+      params.set("limit", String(LIMIT));
+      params.set("page", String(page));
       const { data } = await api.get(`/properties?${params.toString()}`);
       return data;
     },
@@ -63,6 +66,8 @@ export default function PropertyList() {
   });
 
   const rawProperties = data?.data || [];
+  const total: number = data?.meta?.total ?? 0;
+  const totalPages: number = data?.meta?.totalPages ?? 1;
 
   const toggleSort = (field: "monthlyRent" | "createdAt") => {
     if (sortField === field) {
@@ -71,6 +76,7 @@ export default function PropertyList() {
       setSortField(field);
       setSortDir("desc");
     }
+    setPage(1);
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,7 +91,7 @@ export default function PropertyList() {
         <div>
           <h1 className="text-2xl font-heading font-bold">My Properties</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {data?.pagination?.total ?? 0} properties listed
+            {total} properties listed
           </p>
         </div>
         <Button asChild className="bg-secondary hover:bg-orange-dark text-secondary-foreground">
@@ -102,11 +108,11 @@ export default function PropertyList() {
           <Input
             placeholder="Search by title or location..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-9"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-full sm:w-44">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
@@ -234,6 +240,20 @@ export default function PropertyList() {
             )}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t text-xs text-muted-foreground">
+            <span>{total} total · Page {page} of {totalPages}</span>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <span className="px-2">{page} / {totalPages}</span>
+              <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
