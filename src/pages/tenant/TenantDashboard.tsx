@@ -2,15 +2,55 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Home, Search, Heart, FileText, MapPin, Calendar,
   MessageSquare, ChevronRight, CreditCard, Settings, Bell,
-  MessagesSquare, Clock,
+  MessagesSquare, Clock, Phone, Mail, User, TrendingUp,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface LeaseProperty {
+  _id: string;
+  title: string;
+  neighborhood: string;
+  county: string;
+  streetEstate?: string;
+  propertyType: string;
+  images: { url: string; isCover?: boolean }[];
+}
+
+interface LeaseAgent {
+  _id: string;
+  fullName: string;
+  phone?: string;
+  email?: string;
+}
+
+interface Lease {
+  _id: string;
+  occupantName: string;
+  monthlyRent: number;
+  depositAmount: number;
+  leaseStart: string;
+  leaseEnd: string | null;
+  status: "active" | "expired" | "terminated";
+  notes: string | null;
+  propertyId: LeaseProperty;
+  agentId: LeaseAgent;
+}
+
+const TYPE_LABEL: Record<string, string> = {
+  bedsitter: "Bedsitter", studio: "Studio", "1_bedroom": "1 Bedroom",
+  "2_bedroom": "2 Bedroom", "3_bedroom": "3 Bedroom",
+  "4_plus_bedroom": "4+ Bedroom", maisonette: "Maisonette",
+  bungalow: "Bungalow", townhouse: "Townhouse",
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +89,16 @@ const notifColor: Record<string, string> = {
 export default function TenantDashboard() {
   const { user } = useAuth();
 
+  // Active lease
+  const { data: lease, isLoading: leaseLoading } = useQuery<Lease | null>({
+    queryKey: ["myLease"],
+    queryFn: async () => {
+      const { data } = await api.get("/leases/my");
+      return data?.data as Lease | null;
+    },
+    staleTime: 60_000,
+  });
+
   // Conversations → unread messages count
   const { data: chatsData, isLoading: chatsLoading } = useQuery({
     queryKey: ["chatConversations"],
@@ -71,13 +121,28 @@ export default function TenantDashboard() {
     staleTime: 30000,
   });
 
+  // Saved properties count
+  const { data: savedData } = useQuery({
+    queryKey: ["savedProperties"],
+    queryFn: async () => {
+      const { data } = await api.get("/properties/saved");
+      return data;
+    },
+    staleTime: 60_000,
+  });
+
   const conversations = chatsData ?? [];
   const unreadMessages = conversations.reduce((s, c) => s + c.unread, 0);
   const unreadNotifs = notifData?.data?.unreadCount ?? 0;
   const recentActivity = notifData?.data?.notifications ?? [];
   const recentConvs = conversations.slice(0, 3);
+  const savedCount = (savedData?.data?.savedProperties ?? savedData?.data ?? []).length;
 
   const myId = user?.id ?? "";
+
+  const coverImage = lease
+    ? lease.propertyId.images?.find((i) => i.isCover)?.url || lease.propertyId.images?.[0]?.url
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -95,6 +160,61 @@ export default function TenantDashboard() {
           <Link to="/"><Search className="h-4 w-4 mr-2" />Browse Properties</Link>
         </Button>
       </div>
+
+      {/* Active Tenancy Banner */}
+      {leaseLoading ? (
+        <Skeleton className="h-36 w-full rounded-xl" />
+      ) : lease ? (
+        <Card className="border-green-200 bg-green-50/40 overflow-hidden">
+          <div className="flex flex-col sm:flex-row">
+            {coverImage && (
+              <div className="w-full sm:w-44 h-32 sm:h-auto shrink-0 overflow-hidden">
+                <img src={coverImage} alt={lease.propertyId.title} className="h-full w-full object-cover" />
+              </div>
+            )}
+            <div className="flex-1 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Badge className="bg-green-100 text-green-700 border-0 text-xs">Active Tenancy</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {TYPE_LABEL[lease.propertyId.propertyType] ?? lease.propertyId.propertyType}
+                    </Badge>
+                  </div>
+                  <p className="font-semibold font-heading">{lease.propertyId.title}</p>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <MapPin className="h-3.5 w-3.5 shrink-0" />
+                    {[lease.propertyId.streetEstate, lease.propertyId.neighborhood, lease.propertyId.county].filter(Boolean).join(", ")}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" asChild>
+                  <Link to="/tenant/payments"><CreditCard className="h-3.5 w-3.5 mr-1.5" />View Details</Link>
+                </Button>
+              </div>
+
+              <div className="flex flex-wrap gap-4 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <TrendingUp className="h-3.5 w-3.5 text-green-600" />
+                  <span className="font-medium">KES {lease.monthlyRent.toLocaleString()}</span>
+                  <span className="text-muted-foreground text-xs">/month</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-secondary" />
+                  <span className="text-muted-foreground text-xs">Since</span>
+                  <span className="font-medium">{format(new Date(lease.leaseStart), "d MMM yyyy")}</span>
+                </div>
+                {lease.leaseEnd && (
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-amber-500" />
+                    <span className="text-muted-foreground text-xs">Until</span>
+                    <span className="font-medium">{format(new Date(lease.leaseEnd), "d MMM yyyy")}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -122,7 +242,7 @@ export default function TenantDashboard() {
           },
           {
             label: "Saved Properties",
-            value: 0,
+            value: savedCount,
             icon: Heart,
             iconColor: "text-destructive",
             href: "/tenant/saved",
@@ -150,8 +270,56 @@ export default function TenantDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* ─── Recent Conversations ─────────────────────────────────────────── */}
+        {/* ─── Left column ──────────────────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-4">
+
+          {/* Agent / Landlord card — only when onboarded */}
+          {lease && (
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="font-heading text-lg font-semibold text-foreground">Your Agent / Landlord</h2>
+              </div>
+              <Card>
+                <CardContent className="p-4 flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center font-bold text-sm shrink-0">
+                      <User className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">{lease.agentId.fullName}</p>
+                      {lease.agentId.phone && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Phone className="h-3 w-3" /> {lease.agentId.phone}
+                        </p>
+                      )}
+                      {lease.agentId.email && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Mail className="h-3 w-3" /> {lease.agentId.email}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    {lease.agentId.phone && (
+                      <Button size="sm" variant="outline" asChild>
+                        <a href={`tel:${lease.agentId.phone}`}><Phone className="h-3.5 w-3.5 mr-1.5" />Call</a>
+                      </Button>
+                    )}
+                    {lease.agentId.email && (
+                      <Button size="sm" variant="outline" asChild>
+                        <a href={`mailto:${lease.agentId.email}`}><Mail className="h-3.5 w-3.5 mr-1.5" />Email</a>
+                      </Button>
+                    )}
+                    <Button size="sm" className="bg-secondary hover:bg-secondary/90" asChild>
+                      <Link to="/tenant/messages"><MessageSquare className="h-3.5 w-3.5 mr-1.5" />Message</Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Recent Conversations */}
           <div className="flex items-center justify-between">
             <h2 className="font-heading text-lg font-semibold text-foreground">Recent Messages</h2>
             <Button variant="ghost" size="sm" className="font-body text-secondary" asChild>
@@ -230,7 +398,7 @@ export default function TenantDashboard() {
             </div>
           )}
 
-          {/* Saved Properties placeholder */}
+          {/* Saved Properties */}
           <div className="flex items-center justify-between mt-2">
             <h2 className="font-heading text-lg font-semibold text-foreground">Saved Properties</h2>
             <Button variant="ghost" size="sm" className="font-body text-secondary" asChild>
@@ -241,13 +409,20 @@ export default function TenantDashboard() {
             <CardContent className="p-8 flex flex-col items-center text-center gap-3">
               <Heart className="h-10 w-10 text-muted-foreground opacity-30" />
               <div>
-                <p className="font-medium text-sm">No saved properties yet</p>
+                <p className="font-medium text-sm">
+                  {savedCount > 0 ? `${savedCount} saved propert${savedCount === 1 ? "y" : "ies"}` : "No saved properties yet"}
+                </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Tap the ♡ on any listing to save it here for later.
+                  {savedCount > 0
+                    ? "View your full saved list to book viewings or compare."
+                    : "Tap the ♡ on any listing to save it here for later."}
                 </p>
               </div>
               <Button size="sm" asChild className="bg-secondary hover:bg-secondary/90">
-                <Link to="/"><Search className="h-4 w-4 mr-2" />Browse Properties</Link>
+                {savedCount > 0
+                  ? <Link to="/tenant/saved"><Heart className="h-4 w-4 mr-2" />View Saved</Link>
+                  : <Link to="/"><Search className="h-4 w-4 mr-2" />Browse Properties</Link>
+                }
               </Button>
             </CardContent>
           </Card>
@@ -329,6 +504,12 @@ export default function TenantDashboard() {
                   )}
                 </div>
               </div>
+              {lease && (
+                <div className="pt-1 border-t space-y-1">
+                  <p className="text-xs text-muted-foreground">Tenancy as</p>
+                  <p className="text-sm font-medium">{lease.occupantName}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -338,6 +519,11 @@ export default function TenantDashboard() {
               <CardTitle className="text-base font-heading">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              {lease && (
+                <Button variant="outline" className="w-full justify-start font-body" asChild>
+                  <Link to="/tenant/payments"><CreditCard className="h-4 w-4 mr-2" />My Tenancy</Link>
+                </Button>
+              )}
               <Button variant="outline" className="w-full justify-start font-body" asChild>
                 <Link to="/"><Search className="h-4 w-4 mr-2" />Browse Properties</Link>
               </Button>
