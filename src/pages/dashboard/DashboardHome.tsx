@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Building2, Eye, MessageSquare, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { transformProperty } from "@/lib/propertyTransform";
@@ -19,6 +20,7 @@ export default function DashboardHome() {
   const { user } = useAuth();
   const firstName = user?.fullName?.split(" ")[0] ?? "there";
 
+  // Recent properties for the list card (limit 3)
   const { data: propertiesData } = useQuery({
     queryKey: ["dashboardProperties"],
     queryFn: async () => {
@@ -27,7 +29,16 @@ export default function DashboardHome() {
     },
   });
 
-  const { data: inquiriesData } = useQuery({
+  // All properties for aggregate stats (views, occupancy)
+  const { data: allPropsData, isLoading: statsLoading } = useQuery({
+    queryKey: ["dashboardAllProperties"],
+    queryFn: async () => {
+      const { data } = await api.get("/properties?limit=500");
+      return data;
+    },
+  });
+
+  const { data: inquiriesData, isLoading: inquiriesLoading } = useQuery({
     queryKey: ["dashboardInquiries"],
     queryFn: async () => {
       const { data } = await api.get("/inquiries?limit=5");
@@ -35,18 +46,46 @@ export default function DashboardHome() {
     },
   });
 
-  const totalProperties = propertiesData?.pagination?.total ?? 0;
+  const totalProperties: number = allPropsData?.meta?.total ?? 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allProperties: any[] = Array.isArray(allPropsData?.data) ? allPropsData.data : [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recentInquiries: any[] = Array.isArray(inquiriesData?.data) ? inquiriesData.data : [];
   const newInquiries = recentInquiries.filter((i) => i.status === "new").length;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const properties: any[] = Array.isArray(propertiesData?.data) ? propertiesData.data : [];
 
+  const totalViews = allProperties.reduce((sum, p) => sum + (p.viewCount ?? 0), 0);
+  const occupiedCount = allProperties.filter((p) => p.status === "occupied").length;
+  const occupancyRate = allProperties.length > 0
+    ? Math.round((occupiedCount / allProperties.length) * 100)
+    : 0;
+
   const stats = [
-    { label: "Total Properties", value: totalProperties, icon: Building2, trend: "on your account" },
-    { label: "Total Views", value: "—", icon: Eye, trend: "across listings" },
-    { label: "Active Inquiries", value: recentInquiries.length, icon: MessageSquare, trend: `${newInquiries} new` },
-    { label: "Occupancy Rate", value: "—", icon: TrendingUp, trend: "across all listings" },
+    {
+      label: "Total Properties",
+      value: statsLoading ? null : totalProperties,
+      icon: Building2,
+      trend: "on your account",
+    },
+    {
+      label: "Total Views",
+      value: statsLoading ? null : totalViews,
+      icon: Eye,
+      trend: "across all listings",
+    },
+    {
+      label: "Active Inquiries",
+      value: inquiriesLoading ? null : recentInquiries.length,
+      icon: MessageSquare,
+      trend: `${newInquiries} new`,
+    },
+    {
+      label: "Occupancy Rate",
+      value: statsLoading ? null : `${occupancyRate}%`,
+      icon: TrendingUp,
+      trend: `${occupiedCount} of ${totalProperties} occupied`,
+    },
   ];
 
   return (
@@ -70,8 +109,12 @@ export default function DashboardHome() {
               <stat.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold font-heading">{stat.value}</div>
-              <p className="text-xs text-success mt-1">{stat.trend}</p>
+              {stat.value === null ? (
+                <Skeleton className="h-8 w-16 mb-1" />
+              ) : (
+                <div className="text-2xl font-bold font-heading">{stat.value}</div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">{stat.trend}</p>
             </CardContent>
           </Card>
         ))}

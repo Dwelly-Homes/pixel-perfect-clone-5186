@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Upload, X, Star, Trash2, MapPin } from "lucide-react";
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import L from "leaflet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +23,16 @@ import { KENYAN_COUNTIES } from "@/data/properties";
 import { toast } from "sonner";
 import { api, getApiError } from "@/lib/api";
 
-// Backend property type enum values and their display labels
+// Fix leaflet default marker icon (broken with webpack/vite bundlers)
+delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
+
+const MAX_IMAGES = 10;
+
 const PROPERTY_TYPES = [
   { value: "bedsitter", label: "Bedsitter" },
   { value: "studio", label: "Studio" },
@@ -35,7 +46,6 @@ const PROPERTY_TYPES = [
   { value: "commercial", label: "Commercial" },
 ];
 
-// Backend amenity keys and their display labels
 const AMENITIES = [
   { key: "water", label: "Water Supply" },
   { key: "electricity", label: "Electricity" },
@@ -55,11 +65,36 @@ const AMENITIES = [
   { key: "intercom", label: "Intercom" },
 ];
 
+interface ImageItem {
+  id: string;
+  file?: File;
+  preview: string;
+  isCover: boolean;
+  isExisting?: boolean;
+}
+
+// Map click handler component
+function LocationPicker({
+  onSelect,
+}: {
+  onSelect: (lat: number, lng: number) => void;
+}) {
+  useMapEvents({
+    click(e) {
+      onSelect(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
 export default function PropertyForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = Boolean(id);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
 
+  // Form fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [propertyType, setPropertyType] = useState("");
@@ -69,6 +104,13 @@ export default function PropertyForm() {
   const [county, setCounty] = useState("");
   const [status, setStatus] = useState("available");
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
+
+  // Images
+  const [images, setImages] = useState<ImageItem[]>([]);
+
+  // Map / location
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
 
   // Load existing property for editing
   const { data: editData, isLoading: loadingProperty } = useQuery({
@@ -91,12 +133,108 @@ export default function PropertyForm() {
       setCounty(editData.county || "");
       setStatus(editData.status || "available");
       setSelectedAmenities(editData.amenities || []);
+      if (editData.lat) setLat(editData.lat);
+      if (editData.lng) setLng(editData.lng);
+      // Load existing images
+      if (editData.images?.length) {
+        const existing: ImageItem[] = editData.images.map(
+          (img: { url: string; isCover: boolean }, idx: number) => ({
+            id: crypto.randomUUID(),
+            preview: img.url,
+            isCover: img.isCover ?? idx === 0,
+            isExisting: true,
+          })
+        );
+        setImages(existing);
+      }
     }
   }, [editData]);
 
+  // Image upload handling
+  const addFiles = useCallback(
+    (files: FileList | null) => {
+      if (!files) return;
+      const remaining = MAX_IMAGES - images.length;
+      if (remaining <= 0) {
+        toast.error(`Maximum ${MAX_IMAGES} images allowed`);
+        return;
+      }
+      const toAdd = Array.from(files).slice(0, remaining);
+      const newItems: ImageItem[] = [];
+      for (const file of toAdd) {
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+          toast.error(`${file.name} is not a valid image (JPG, PNG, WebP only)`);
+          continue;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`${file.name} exceeds 5MB`);
+          continue;
+        }
+        newItems.push({
+          id: crypto.randomUUID(),
+          file,
+          preview: URL.createObjectURL(file),
+          isCover: images.length === 0 && newItems.length === 0,
+        });
+      }
+      setImages((prev) => [...prev, ...newItems]);
+    },
+    [images]
+  );
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragging(false);
+      addFiles(e.dataTransfer.files);
+    },
+    [addFiles]
+  );
+
+  const removeImage = (imgId: string) => {
+    setImages((prev) => {
+      const filtered = prev.filter((i) => i.id !== imgId);
+      // If removed image was cover, make first the new cover
+      const wasRemovedCover = prev.find((i) => i.id === imgId)?.isCover;
+      if (wasRemovedCover && filtered.length > 0) {
+        filtered[0].isCover = true;
+      }
+      return filtered;
+    });
+  };
+
+  const setCover = (imgId: string) => {
+    setImages((prev) => prev.map((i) => ({ ...i, isCover: i.id === imgId })));
+  };
+
+  const toggleAmenity = (key: string) => {
+    setSelectedAmenities((prev) =>
+      prev.includes(key) ? prev.filter((a) => a !== key) : [...prev, key]
+    );
+  };
+
+  const uploadImagesMutation = useMutation({
+    mutationFn: ({ propertyId, files }: { propertyId: string; files: File[] }) => {
+      const formData = new FormData();
+      files.forEach((f) => formData.append("images", f));
+      return api.post(`/properties/${propertyId}/images`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.post("/properties", body),
-    onSuccess: () => {
+    onSuccess: async (res) => {
+      const propertyId = res.data?.data?._id;
+      const newFiles = images.filter((i) => i.file).map((i) => i.file!);
+      if (propertyId && newFiles.length > 0) {
+        try {
+          await uploadImagesMutation.mutateAsync({ propertyId, files: newFiles });
+        } catch {
+          toast.warning("Property created but some images failed to upload.");
+        }
+      }
       toast.success("Property created successfully!");
       navigate("/dashboard/properties");
     },
@@ -105,26 +243,29 @@ export default function PropertyForm() {
 
   const updateMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.patch(`/properties/${id}`, body),
-    onSuccess: () => {
+    onSuccess: async () => {
+      const newFiles = images.filter((i) => i.file).map((i) => i.file!);
+      if (id && newFiles.length > 0) {
+        try {
+          await uploadImagesMutation.mutateAsync({ propertyId: id, files: newFiles });
+        } catch {
+          toast.warning("Property updated but some images failed to upload.");
+        }
+      }
       toast.success("Property updated successfully!");
       navigate("/dashboard/properties");
     },
     onError: (err) => toast.error(getApiError(err)),
   });
 
-  const toggleAmenity = (key: string) => {
-    setSelectedAmenities((prev) =>
-      prev.includes(key) ? prev.filter((a) => a !== key) : [...prev, key]
-    );
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !propertyType || !price || !neighborhood || !county) {
+    if (!title.trim() || !description.trim() || !propertyType || !price || !neighborhood || !county) {
       toast.error("Please fill in all required fields");
       return;
     }
-    const body = {
+
+    const body: Record<string, unknown> = {
       title: title.trim(),
       description: description.trim(),
       propertyType,
@@ -135,6 +276,10 @@ export default function PropertyForm() {
       status,
       amenities: selectedAmenities,
     };
+    if (lat !== null && lng !== null) {
+      body.coordinates = { lat, lng };
+    }
+
     if (isEditing) {
       updateMutation.mutate(body);
     } else {
@@ -142,7 +287,11 @@ export default function PropertyForm() {
     }
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || uploadImagesMutation.isPending;
+
+  // Default map center — Nairobi, Kenya
+  const mapCenter: [number, number] =
+    lat !== null && lng !== null ? [lat, lng] : [-1.2921, 36.8219];
 
   if (isEditing && loadingProperty) {
     return (
@@ -166,12 +315,15 @@ export default function PropertyForm() {
             {isEditing ? "Edit Property" : "Add New Property"}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {isEditing ? "Update your property listing details" : "Create a new property listing for the marketplace"}
+            {isEditing
+              ? "Update your property listing details"
+              : "Create a new property listing for the marketplace"}
           </p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Basic Information */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-heading">Basic Information</CardTitle>
@@ -188,7 +340,7 @@ export default function PropertyForm() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">Description *</Label>
               <Textarea
                 id="description"
                 placeholder="Describe your property in detail..."
@@ -231,6 +383,7 @@ export default function PropertyForm() {
           </CardContent>
         </Card>
 
+        {/* Location & Pricing */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-heading">Location & Pricing</CardTitle>
@@ -295,9 +448,165 @@ export default function PropertyForm() {
                 </div>
               </div>
             </div>
+
+            {/* Map Picker */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                Pin Property Location on Map
+                <span className="text-xs text-muted-foreground font-normal">(optional — click to set)</span>
+              </Label>
+              <div className="rounded-lg overflow-hidden border h-72">
+                <MapContainer
+                  center={mapCenter}
+                  zoom={12}
+                  style={{ height: "100%", width: "100%" }}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  <LocationPicker
+                    onSelect={(lt, ln) => {
+                      setLat(lt);
+                      setLng(ln);
+                    }}
+                  />
+                  {lat !== null && lng !== null && (
+                    <Marker position={[lat, lng]} />
+                  )}
+                </MapContainer>
+              </div>
+              {lat !== null && lng !== null ? (
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    Selected: {lat.toFixed(6)}, {lng.toFixed(6)}
+                  </p>
+                  <button
+                    type="button"
+                    className="text-xs text-destructive hover:underline"
+                    onClick={() => { setLat(null); setLng(null); }}
+                  >
+                    Clear location
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Click anywhere on the map to pin the property location.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
 
+        {/* Photo Upload */}
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-heading flex items-center justify-between">
+              <span>Property Photos</span>
+              <span className="text-sm font-normal text-muted-foreground">{images.length} / {MAX_IMAGES}</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Drop Zone */}
+            {images.length < MAX_IMAGES && (
+              <div
+                className={`border-2 border-dashed rounded-lg transition-colors cursor-pointer ${
+                  dragging
+                    ? "border-secondary bg-secondary/5"
+                    : "border-border hover:border-secondary/60"
+                }`}
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={onDrop}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                    <Upload className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-medium text-sm">Drag photos here or click to browse</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      JPG, PNG, WebP · Max 5MB per file · Up to {MAX_IMAGES} images
+                    </p>
+                  </div>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => addFiles(e.target.files)}
+                />
+              </div>
+            )}
+
+            {/* Image Previews */}
+            {images.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {images.map((img) => (
+                  <div
+                    key={img.id}
+                    className="relative group aspect-square rounded-lg overflow-hidden bg-muted border"
+                  >
+                    <img
+                      src={img.preview}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                    {img.isCover && (
+                      <Badge className="absolute top-1 left-1 bg-secondary text-secondary-foreground text-[10px] px-1.5 py-0">
+                        Cover
+                      </Badge>
+                    )}
+                    {/* Hover overlay */}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/45 transition-all flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100">
+                      {!img.isCover && (
+                        <button
+                          type="button"
+                          className="h-7 w-7 rounded-full bg-white/80 hover:bg-secondary hover:text-white flex items-center justify-center transition-colors"
+                          title="Set as cover"
+                          onClick={() => setCover(img.id)}
+                        >
+                          <Star className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="h-7 w-7 rounded-full bg-white/80 hover:bg-destructive hover:text-white flex items-center justify-center transition-colors"
+                        title="Remove photo"
+                        onClick={() => removeImage(img.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Empty slot indicators */}
+                {Array.from({ length: MAX_IMAGES - images.length }).map((_, i) => (
+                  <div
+                    key={`empty-${i}`}
+                    className="aspect-square rounded-lg border-2 border-dashed border-border/50 flex items-center justify-center cursor-pointer hover:border-secondary/40 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <X className="h-4 w-4 text-border rotate-45" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {images.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Add at least 1 photo to make your listing more attractive.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Amenities */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-heading">Amenities</CardTitle>
@@ -313,7 +622,13 @@ export default function PropertyForm() {
                     checked={selectedAmenities.includes(amenity.key)}
                     onCheckedChange={() => toggleAmenity(amenity.key)}
                   />
-                  <span className={selectedAmenities.includes(amenity.key) ? "text-foreground font-medium" : "text-muted-foreground"}>
+                  <span
+                    className={
+                      selectedAmenities.includes(amenity.key)
+                        ? "text-foreground font-medium"
+                        : "text-muted-foreground"
+                    }
+                  >
                     {amenity.label}
                   </span>
                 </label>
@@ -324,7 +639,12 @@ export default function PropertyForm() {
                 {selectedAmenities.map((key) => {
                   const amenity = AMENITIES.find((a) => a.key === key);
                   return (
-                    <Badge key={key} variant="secondary" className="gap-1 cursor-pointer" onClick={() => toggleAmenity(key)}>
+                    <Badge
+                      key={key}
+                      variant="secondary"
+                      className="gap-1 cursor-pointer"
+                      onClick={() => toggleAmenity(key)}
+                    >
                       {amenity?.label || key}
                       <span className="ml-0.5">×</span>
                     </Badge>
@@ -341,11 +661,21 @@ export default function PropertyForm() {
           <Button type="button" variant="outline" asChild>
             <Link to="/dashboard/properties">Cancel</Link>
           </Button>
-          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary hover:bg-orange-dark text-secondary-foreground">
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full sm:w-auto bg-secondary hover:bg-orange-dark text-secondary-foreground"
+          >
             {isSubmitting ? (
-              <span className="flex items-center gap-2"><span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{isEditing ? "Saving…" : "Publishing…"}</span>
+              <span className="flex items-center gap-2">
+                <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                {isEditing ? "Saving…" : "Publishing…"}
+              </span>
             ) : (
-              <span className="flex items-center gap-2"><Save className="h-4 w-4" />{isEditing ? "Save Changes" : "Publish Listing"}</span>
+              <span className="flex items-center gap-2">
+                <Save className="h-4 w-4" />
+                {isEditing ? "Save Changes" : "Publish Listing"}
+              </span>
             )}
           </Button>
         </div>

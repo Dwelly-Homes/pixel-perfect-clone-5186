@@ -6,6 +6,16 @@ import {
   Check, ChevronLeft, ChevronRight, X, Send, Eye, Calendar,
   Globe, Pencil, AlertTriangle,
 } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import L from "leaflet";
+
+// Fix Leaflet default marker icons broken by bundlers
+delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
 import { MarketplaceNav } from "@/components/marketplace/MarketplaceNav";
 import { Footer } from "@/components/marketplace/Footer";
 import { InquiryModal } from "@/components/marketplace/InquiryModal";
@@ -266,9 +276,47 @@ export default function PropertyDetail() {
             {/* Location */}
             <div>
               <h2 className="font-heading text-lg font-semibold text-foreground mb-3">Location</h2>
-              <div className="rounded-xl bg-muted h-64 flex items-center justify-center text-muted-foreground font-body text-sm">
-                <MapPin className="h-6 w-6 mr-2" /> {property.location.neighborhood}, {property.location.county}
-              </div>
+              {(() => {
+                const hasPin = !!(rawProperty.coordinates?.lat && rawProperty.coordinates?.lng);
+                const center: [number, number] = [property.location.lat, property.location.lng];
+                const zoom = hasPin ? 15 : 11;
+                return (
+                  <div className="space-y-2">
+                    <div className="rounded-xl overflow-hidden border border-border h-72">
+                      <MapContainer
+                        key={`${center[0]}-${center[1]}`}
+                        center={center}
+                        zoom={zoom}
+                        scrollWheelZoom={false}
+                        style={{ height: "100%", width: "100%" }}
+                      >
+                        <TileLayer
+                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                        {hasPin && (
+                          <Marker position={center}>
+                            <Popup className="font-body text-sm">
+                              <strong className="font-heading">{property.title}</strong>
+                              <br />
+                              {property.location.neighborhood}, {property.location.county}
+                            </Popup>
+                          </Marker>
+                        )}
+                      </MapContainer>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground font-body">
+                      <MapPin className="h-4 w-4 shrink-0 text-secondary" />
+                      <span>
+                        {property.location.neighborhood}, {property.location.county}
+                        {!hasPin && (
+                          <span className="ml-1 text-xs opacity-70">— exact pin not set</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
