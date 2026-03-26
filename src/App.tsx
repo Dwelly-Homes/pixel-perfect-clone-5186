@@ -25,6 +25,7 @@ import InviteMember from "./pages/dashboard/InviteMember.tsx";
 import Inquiries from "./pages/dashboard/Inquiries.tsx";
 import Viewings from "./pages/dashboard/Viewings.tsx";
 import Notifications from "./pages/dashboard/Notifications.tsx";
+import Chat from "./pages/dashboard/Chat.tsx";
 import Verification from "./pages/dashboard/Verification.tsx";
 import Commissions from "./pages/dashboard/Commissions.tsx";
 import Billing from "./pages/dashboard/Billing.tsx";
@@ -108,6 +109,7 @@ const App = () => (
             <Route path="inquiries" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><Inquiries /></RoleGuard>} />
             <Route path="viewings" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><Viewings /></RoleGuard>} />
             <Route path="notifications" element={<Notifications />} />
+            <Route path="chat" element={<Chat />} />
             <Route path="verification" element={<RoleGuard roles={["tenant_admin"]}><Verification /></RoleGuard>} />
             <Route path="commissions" element={<RoleGuard roles={["tenant_admin"]}><Commissions /></RoleGuard>} />
             <Route path="billing" element={<RoleGuard roles={["tenant_admin"]}><Billing /></RoleGuard>} />
