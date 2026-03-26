@@ -1,66 +1,106 @@
 import { useState } from "react";
-import { ArrowLeft, Building2, Users, CreditCard, ShieldCheck, MapPin, Mail, Phone, Globe, AlertTriangle, CheckCircle2, UserX, UserCheck } from "lucide-react";
+import { ArrowLeft, Building2, Users, CreditCard, ShieldCheck, MapPin, Mail, Phone, AlertTriangle, CheckCircle2, UserX, UserCheck, XCircle } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-const MOCK = {
-  id: "1",
-  name: "Prestige Properties Ltd",
-  email: "info@prestige.co.ke",
-  phone: "+254 712 345 678",
-  website: "www.prestigeproperties.co.ke",
-  address: "Westlands Business Park, Nairobi",
-  earbNumber: "EARB/2021/0042",
-  earbExpiry: "2024-07-15",
-  plan: "Professional",
-  planPrice: 4500,
-  planRenewal: "2024-07-15",
-  status: "Active",
-  joinedOn: "2021-03-15",
-  listings: 24,
-  occupiedListings: 18,
-  availableListings: 6,
-  teamCount: 7,
-  teamAllowed: 10,
-  totalRevenue: 162000,
-  commissionsPaid: 18000,
-  subscriptionsPaid: 54000,
-  team: [
-    { name: "James Mwenda", email: "j.mwenda@prestige.co.ke", role: "Admin", status: "Active" },
-    { name: "Alice Njoki", email: "a.njoki@prestige.co.ke", role: "Agent", status: "Active" },
-    { name: "Brian Oloo", email: "b.oloo@prestige.co.ke", role: "Agent", status: "Active" },
-    { name: "Carol Wainaina", email: "c.wainaina@prestige.co.ke", role: "Caretaker", status: "Active" },
-  ],
-  listings_data: [
-    { id: "1", title: "Modern 2BR in Kilimani", area: "Kilimani", rent: 55000, status: "Occupied", tenant: "Grace Akinyi" },
-    { id: "2", title: "Elegant 1BR in Lavington", area: "Lavington", rent: 40000, status: "Occupied", tenant: "David Kamau" },
-    { id: "3", title: "Studio in Westlands", area: "Westlands", rent: 25000, status: "Available", tenant: "" },
-    { id: "4", title: "3BR in Karen", area: "Karen", rent: 120000, status: "Occupied", tenant: "Peter Odhiambo" },
-  ],
-  billing: [
-    { date: "2024-06-15", desc: "Professional Plan — Monthly", amount: 4500, status: "Paid", receipt: "MPESA-ABC123" },
-    { date: "2024-05-15", desc: "Professional Plan — Monthly", amount: 4500, status: "Paid", receipt: "MPESA-DEF456" },
-    { date: "2024-05-10", desc: "Commission — Elegant 1BR", amount: 2000, status: "Paid", receipt: "MPESA-GHI789" },
-    { date: "2024-04-15", desc: "Professional Plan — Monthly", amount: 4500, status: "Paid", receipt: "MPESA-JKL012" },
-  ],
-};
+import { api, getApiError } from "@/lib/api";
 
 const TABS = ["Overview", "Listings", "Team", "Billing", "Verification"] as const;
 
-export default function AdminAgentDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const [tab, setTab] = useState<typeof TABS[number]>("Overview");
-  const a = MOCK;
+const verificationColors: Record<string, string> = {
+  approved: "bg-green-100 text-green-700 border-green-200",
+  rejected: "bg-red-100 text-red-700 border-red-200",
+  documents_uploaded: "bg-blue-100 text-blue-700 border-blue-200",
+  under_review: "bg-amber-100 text-amber-700 border-amber-200",
+  not_submitted: "bg-gray-100 text-gray-600 border-gray-200",
+};
 
-  const occupancyRate = Math.round((a.occupiedListings / a.listings) * 100);
-  const daysLeft = Math.ceil((new Date(a.earbExpiry).getTime() - new Date("2024-06-21").getTime()) / 86400000);
+const propertyStatusColors: Record<string, string> = {
+  available: "bg-blue-100 text-blue-700",
+  rented: "bg-green-100 text-green-700",
+  draft: "bg-gray-100 text-gray-600",
+  expired: "bg-red-100 text-red-700",
+};
+
+export default function AdminAgentDetail() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<typeof TABS[number]>("Overview");
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["adminAgentDetail", id],
+    queryFn: async () => {
+      const { data } = await api.get(`/admin/tenants/${id}`);
+      return data.data as {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tenant: any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        users: any[];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        properties: any[];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        payments: any[];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        auditLogs: any[];
+      };
+    },
+    enabled: !!id,
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: (status: string) => api.patch(`/tenants/${id}/status`, { status }),
+    onSuccess: (_, status) => {
+      queryClient.invalidateQueries({ queryKey: ["adminAgentDetail", id] });
+      queryClient.invalidateQueries({ queryKey: ["adminAgents"] });
+      toast.success(`Agent ${status === "active" ? "reinstated" : "suspended"}`);
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-4 max-w-5xl">
+        <div className="h-8 bg-muted rounded w-64 animate-pulse" />
+        <div className="h-4 bg-muted rounded w-48 animate-pulse" />
+        <div className="grid grid-cols-4 gap-4 mt-6">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 bg-muted rounded animate-pulse" />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="p-6 max-w-5xl">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/admin/agents")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="mt-8 text-center text-muted-foreground">
+          <XCircle className="h-10 w-10 mx-auto mb-3 opacity-40" />
+          <p>Agent not found or could not be loaded.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { tenant, users, properties, payments } = data;
+
+  const earbExpiry = tenant.earbExpiryDate ? new Date(tenant.earbExpiryDate) : null;
+  const daysLeft = earbExpiry ? Math.ceil((earbExpiry.getTime() - Date.now()) / 86400000) : null;
+  const earbWarning = daysLeft !== null && daysLeft <= 30;
+
+  const availableListings = properties.filter((p) => p.status === "available").length;
+  const rentedListings = properties.filter((p) => p.status === "rented").length;
+  const occupancyRate = properties.length > 0 ? Math.round((rentedListings / properties.length) * 100) : 0;
+
+  const planLimits: Record<string, number> = { starter: 10, professional: 50, enterprise: 999 };
+  const planLimit = planLimits[tenant.subscriptionPlan] ?? 10;
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
@@ -71,19 +111,25 @@ export default function AdminAgentDetail() {
         </Button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-heading font-bold">{a.name}</h1>
-            <Badge className={a.status === "Active" ? "bg-green-100 text-green-700 border-0" : "bg-red-100 text-red-700 border-0"}>{a.status}</Badge>
-            <Badge variant="outline" className="text-xs">{a.plan} Plan</Badge>
+            <h1 className="text-2xl font-heading font-bold">{tenant.businessName}</h1>
+            <Badge className={tenant.status === "active" ? "bg-green-100 text-green-700 border-0" : "bg-red-100 text-red-700 border-0"}>
+              {tenant.status}
+            </Badge>
+            <Badge variant="outline" className="text-xs capitalize">{tenant.subscriptionPlan} Plan</Badge>
           </div>
-          <p className="text-sm text-muted-foreground">{a.email} · Member since {new Date(a.joinedOn).toLocaleDateString("en-KE", { month: "long", year: "numeric" })}</p>
+          <p className="text-sm text-muted-foreground">
+            {tenant.contactEmail} · Member since {new Date(tenant.createdAt).toLocaleDateString("en-KE", { month: "long", year: "numeric" })}
+          </p>
         </div>
         <div className="flex gap-2 shrink-0">
-          {a.status === "Active" ? (
-            <Button variant="destructive" size="sm" onClick={() => toast({ title: "Agent suspended", description: a.name })}>
+          {tenant.status === "active" ? (
+            <Button variant="destructive" size="sm" disabled={statusMutation.isPending}
+              onClick={() => statusMutation.mutate("suspended")}>
               <UserX className="h-4 w-4 mr-2" />Suspend
             </Button>
           ) : (
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => toast({ title: "Agent reinstated", description: a.name })}>
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" disabled={statusMutation.isPending}
+              onClick={() => statusMutation.mutate("active")}>
               <UserCheck className="h-4 w-4 mr-2" />Reinstate
             </Button>
           )}
@@ -107,10 +153,10 @@ export default function AdminAgentDetail() {
         <div className="space-y-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: "Total Listings", value: a.listings, icon: Building2 },
-              { label: "Occupied", value: `${occupancyRate}%`, icon: CheckCircle2 },
-              { label: "Team Members", value: `${a.teamCount}/${a.teamAllowed}`, icon: Users },
-              { label: "Total Revenue", value: `KES ${a.totalRevenue.toLocaleString()}`, icon: CreditCard },
+              { label: "Total Listings", value: properties.length, icon: Building2 },
+              { label: "Occupancy", value: `${occupancyRate}%`, icon: CheckCircle2 },
+              { label: "Team Members", value: users.length, icon: Users },
+              { label: "Available", value: availableListings, icon: CreditCard },
             ].map((s) => (
               <Card key={s.label}>
                 <CardContent className="p-4 flex items-center gap-3">
@@ -130,10 +176,10 @@ export default function AdminAgentDetail() {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-muted-foreground">Contact & Location</CardTitle></CardHeader>
               <CardContent className="space-y-2.5 text-sm">
-                <div className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />{a.email}</div>
-                <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />{a.phone}</div>
-                <div className="flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />{a.website}</div>
-                <div className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />{a.address}</div>
+                <div className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />{tenant.contactEmail || "—"}</div>
+                <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />{tenant.contactPhone || "—"}</div>
+                <div className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />{tenant.physicalAddress || tenant.county || "—"}</div>
+                {tenant.bio && <p className="text-xs text-muted-foreground pt-1 border-t">{tenant.bio}</p>}
               </CardContent>
             </Card>
             <Card>
@@ -142,39 +188,41 @@ export default function AdminAgentDetail() {
                 <div>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-muted-foreground">Occupancy rate</span>
-                    <span className="font-medium">{a.occupiedListings} / {a.listings} occupied</span>
+                    <span className="font-medium">{rentedListings} / {properties.length} rented</span>
                   </div>
                   <Progress value={occupancyRate} className="h-2" />
                 </div>
                 <div>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-muted-foreground">Plan listing allowance</span>
-                    <span className="font-medium">{a.listings} / 50 used</span>
+                    <span className="font-medium">{properties.length} / {planLimit === 999 ? "∞" : planLimit} used</span>
                   </div>
-                  <Progress value={(a.listings / 50) * 100} className="h-2" />
+                  <Progress value={planLimit === 999 ? 0 : (properties.length / planLimit) * 100} className="h-2" />
                 </div>
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div className="p-2 bg-muted/40 rounded text-center">
-                    <p className="text-xs text-muted-foreground">Subscriptions paid</p>
-                    <p className="text-sm font-semibold">KES {a.subscriptionsPaid.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Plan</p>
+                    <p className="text-sm font-semibold capitalize">{tenant.subscriptionPlan}</p>
                   </div>
                   <div className="p-2 bg-muted/40 rounded text-center">
-                    <p className="text-xs text-muted-foreground">Commissions paid</p>
-                    <p className="text-sm font-semibold">KES {a.commissionsPaid.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Verification</p>
+                    <p className="text-sm font-semibold capitalize">{tenant.verificationStatus?.replace(/_/g, " ") || "—"}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* EARB Warning */}
-          {daysLeft <= 30 && (
+          {earbWarning && earbExpiry && (
             <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
               <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-amber-800">EARB Certificate {daysLeft < 0 ? "Expired" : "Expiring Soon"}</p>
+                <p className="text-sm font-semibold text-amber-800">
+                  EARB Certificate {daysLeft !== null && daysLeft < 0 ? "Expired" : "Expiring Soon"}
+                </p>
                 <p className="text-sm text-amber-700">
-                  {daysLeft < 0 ? `Expired ${Math.abs(daysLeft)} days ago.` : `Expires in ${daysLeft} days.`} EARB No: {a.earbNumber}
+                  {daysLeft !== null && daysLeft < 0 ? `Expired ${Math.abs(daysLeft)} days ago.` : `Expires in ${daysLeft} days.`}
+                  {tenant.earbNumber ? ` EARB No: ${tenant.earbNumber}` : ""}
                 </p>
               </div>
             </div>
@@ -189,23 +237,32 @@ export default function AdminAgentDetail() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/40">
-                  {["Property", "Area", "Monthly Rent", "Status", "Tenant"].map((h) => (
+                  {["Property", "Monthly Rent", "Status", "Inquiries", "Listed On"].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {a.listings_data.map((l) => (
-                  <tr key={l.id} className="border-b last:border-0 hover:bg-muted/20">
-                    <td className="px-4 py-3 text-xs font-medium">{l.title}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{l.area}</td>
-                    <td className="px-4 py-3 text-xs font-medium">KES {l.rent.toLocaleString()}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", l.status === "Occupied" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>{l.status}</span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{l.tenant || "—"}</td>
-                  </tr>
-                ))}
+                {properties.length === 0 ? (
+                  <tr><td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">No listings yet.</td></tr>
+                ) : (
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  properties.map((p: any) => (
+                    <tr key={p._id} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-4 py-3 text-xs font-medium">{p.title}</td>
+                      <td className="px-4 py-3 text-xs font-medium">KES {(p.monthlyRent || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3">
+                        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize", propertyStatusColors[p.status] || "bg-gray-100 text-gray-600")}>
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{p.inquiryCount ?? 0}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {new Date(p.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </CardContent>
@@ -219,20 +276,34 @@ export default function AdminAgentDetail() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/40">
-                  {["Name", "Email", "Role", "Status"].map((h) => (
+                  {["Name", "Email", "Role", "Status", "Joined"].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {a.team.map((m, i) => (
-                  <tr key={i} className="border-b last:border-0">
-                    <td className="px-4 py-3 text-xs font-medium">{m.name}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{m.email}</td>
-                    <td className="px-4 py-3"><span className="text-[10px] px-2 py-0.5 rounded-full bg-muted font-medium">{m.role}</span></td>
-                    <td className="px-4 py-3"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{m.status}</span></td>
-                  </tr>
-                ))}
+                {users.length === 0 ? (
+                  <tr><td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">No team members found.</td></tr>
+                ) : (
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  users.map((u: any) => (
+                    <tr key={u._id} className="border-b last:border-0">
+                      <td className="px-4 py-3 text-xs font-medium">{u.fullName}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{u.email}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted font-medium capitalize">{u.role?.replace(/_/g, " ")}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", u.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600")}>
+                          {u.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {new Date(u.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </CardContent>
@@ -243,30 +314,56 @@ export default function AdminAgentDetail() {
       {tab === "Billing" && (
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
-            <Card><CardContent className="p-4 text-center"><p className="text-xs text-muted-foreground">Current Plan</p><p className="font-heading font-bold text-lg mt-1">{a.plan}</p><p className="text-xs text-muted-foreground">KES {a.planPrice.toLocaleString()}/mo</p></CardContent></Card>
-            <Card><CardContent className="p-4 text-center"><p className="text-xs text-muted-foreground">Next Renewal</p><p className="font-heading font-bold text-lg mt-1">{new Date(a.planRenewal).toLocaleDateString("en-KE", { day: "numeric", month: "short" })}</p></CardContent></Card>
-            <Card><CardContent className="p-4 text-center"><p className="text-xs text-muted-foreground">Total Paid</p><p className="font-heading font-bold text-lg mt-1">KES {a.totalRevenue.toLocaleString()}</p></CardContent></Card>
+            <Card><CardContent className="p-4 text-center">
+              <p className="text-xs text-muted-foreground">Current Plan</p>
+              <p className="font-heading font-bold text-lg mt-1 capitalize">{tenant.subscriptionPlan}</p>
+            </CardContent></Card>
+            <Card><CardContent className="p-4 text-center">
+              <p className="text-xs text-muted-foreground">Plan Expiry</p>
+              <p className="font-heading font-bold text-lg mt-1">
+                {tenant.subscriptionExpiresAt
+                  ? new Date(tenant.subscriptionExpiresAt).toLocaleDateString("en-KE", { day: "numeric", month: "short" })
+                  : "—"}
+              </p>
+            </CardContent></Card>
+            <Card><CardContent className="p-4 text-center">
+              <p className="text-xs text-muted-foreground">Total Transactions</p>
+              <p className="font-heading font-bold text-lg mt-1">{payments.length}</p>
+            </CardContent></Card>
           </div>
           <Card>
             <CardContent className="p-0">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/40">
-                    {["Date", "Description", "Amount", "Status", "Receipt"].map((h) => (
+                    {["Date", "Type", "Amount", "Status", "Reference"].map((h) => (
                       <th key={h} className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {a.billing.map((b, i) => (
-                    <tr key={i} className="border-b last:border-0">
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(b.date).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</td>
-                      <td className="px-4 py-3 text-xs">{b.desc}</td>
-                      <td className="px-4 py-3 text-xs font-medium">KES {b.amount.toLocaleString()}</td>
-                      <td className="px-4 py-3"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{b.status}</span></td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{b.receipt}</td>
-                    </tr>
-                  ))}
+                  {payments.length === 0 ? (
+                    <tr><td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">No payment history.</td></tr>
+                  ) : (
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    payments.map((b: any, i: number) => (
+                      <tr key={b._id || i} className="border-b last:border-0">
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {new Date(b.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                        </td>
+                        <td className="px-4 py-3 text-xs capitalize">{b.type?.replace(/_/g, " ") || "—"}</td>
+                        <td className="px-4 py-3 text-xs font-medium">KES {(b.amount || 0).toLocaleString()}</td>
+                        <td className="px-4 py-3">
+                          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                            b.status === "success" ? "bg-green-100 text-green-700" :
+                            b.status === "failed" ? "bg-red-100 text-red-700" :
+                            "bg-amber-100 text-amber-700"
+                          )}>{b.status}</span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{b.mpesaReceiptNumber || b.reference || "—"}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </CardContent>
@@ -278,25 +375,48 @@ export default function AdminAgentDetail() {
       {tab === "Verification" && (
         <Card>
           <CardContent className="p-6 space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+            <div className={cn("flex items-center gap-3 p-3 border rounded-lg", verificationColors[tenant.verificationStatus] || verificationColors.not_submitted)}>
+              {tenant.verificationStatus === "approved" ? (
+                <CheckCircle2 className="h-5 w-5 shrink-0" />
+              ) : tenant.verificationStatus === "rejected" ? (
+                <XCircle className="h-5 w-5 shrink-0" />
+              ) : (
+                <ShieldCheck className="h-5 w-5 shrink-0" />
+              )}
               <div>
-                <p className="text-sm font-semibold text-green-800">Verification Approved</p>
-                <p className="text-xs text-green-700">All documents verified. Account is fully active.</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><p className="text-xs text-muted-foreground">EARB Number</p><p className="font-mono font-medium mt-0.5">{a.earbNumber}</p></div>
-              <div><p className="text-xs text-muted-foreground">EARB Expiry</p>
-                <p className={cn("font-medium mt-0.5", daysLeft < 0 ? "text-red-600" : daysLeft <= 30 ? "text-amber-600" : "text-green-600")}>
-                  {new Date(a.earbExpiry).toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" })}
-                  {daysLeft < 0 ? " (Expired)" : daysLeft <= 30 ? ` (${daysLeft}d left)` : ""}
+                <p className="text-sm font-semibold capitalize">{tenant.verificationStatus?.replace(/_/g, " ") || "Not Submitted"}</p>
+                <p className="text-xs opacity-80">
+                  {tenant.verificationStatus === "approved" ? "All documents verified. Account is fully active." :
+                   tenant.verificationStatus === "rejected" ? "Verification was rejected." :
+                   tenant.verificationStatus === "documents_uploaded" ? "Documents submitted, awaiting review." :
+                   "Verification documents not yet submitted."}
                 </p>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => toast({ title: "Renewal reminder sent", description: a.name })}>
-              Send EARB Renewal Reminder
-            </Button>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">EARB Number</p>
+                <p className="font-mono font-medium mt-0.5">{tenant.earbNumber || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">EARB Expiry</p>
+                {earbExpiry ? (
+                  <p className={cn("font-medium mt-0.5",
+                    daysLeft !== null && daysLeft < 0 ? "text-red-600" :
+                    daysLeft !== null && daysLeft <= 30 ? "text-amber-600" : "text-green-600"
+                  )}>
+                    {earbExpiry.toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" })}
+                    {daysLeft !== null && daysLeft < 0 ? " (Expired)" : daysLeft !== null && daysLeft <= 30 ? ` (${daysLeft}d left)` : ""}
+                  </p>
+                ) : <p className="mt-0.5 text-muted-foreground">—</p>}
+              </div>
+              {tenant.adminNotes && (
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground">Admin Notes</p>
+                  <p className="text-sm mt-0.5 bg-muted/40 p-2 rounded">{tenant.adminNotes}</p>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

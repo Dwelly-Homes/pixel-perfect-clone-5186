@@ -47,7 +47,13 @@ function DocUploadCard({ title, description, docState, onUpload, required = true
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) onUpload(file);
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Only image files are accepted (JPG, PNG, WEBP, etc.)");
+      return;
+    }
+    onUpload(file);
   }
 
   return (
@@ -89,10 +95,11 @@ function DocUploadCard({ title, description, docState, onUpload, required = true
             ) : (
               <Upload className="h-6 w-6 text-muted-foreground" />
             )}
-            <p className="text-xs text-muted-foreground">{uploading ? "Uploading…" : "Click to upload file"}</p>
+            <p className="text-xs text-muted-foreground">{uploading ? "Uploading…" : "Click to upload image"}</p>
+            <p className="text-[10px] text-muted-foreground/70">JPG, PNG, WEBP accepted</p>
           </button>
         )}
-        <input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,.pdf" className="hidden" onChange={handleFile} />
+        <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
       </CardContent>
     </Card>
   );
@@ -161,6 +168,10 @@ export default function Verification() {
   async function uploadDoc(key: string, file: File) {
     const docType = DOC_KEY_TO_TYPE[key];
     if (!docType) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Only image files are accepted (JPG, PNG, WEBP, etc.)");
+      return;
+    }
     setUploadingKey(key);
     try {
       const formData = new FormData();
@@ -194,7 +205,7 @@ export default function Verification() {
   async function handleSubmit() {
     setSubmitting(true);
     try {
-      await api.post("/verification/submit");
+      await api.post("/verification/submit", isEstateAgent && earbExpiry ? { earbExpiryDate: earbExpiry } : {});
       setStatus("documents_uploaded");
       toast.success("Submitted for review", { description: "We will review your documents within 1–2 business days." });
     } catch (err) {
@@ -257,16 +268,48 @@ export default function Verification() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {docs.earb.filename ? (
-                  <div className="flex items-center gap-2 p-3 bg-muted/40 rounded-lg">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <p className="text-xs font-medium">{docs.earb.filename}</p>
+                {uploadingKey === "earb" ? (
+                  <div className="w-full border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center gap-2 opacity-60">
+                    <span className="h-6 w-6 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
+                    <p className="text-xs text-muted-foreground">Uploading…</p>
+                  </div>
+                ) : docs.earb.filename ? (
+                  <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs font-medium">{docs.earb.filename}</p>
+                        {docs.earb.uploadedAt && <p className="text-xs text-muted-foreground">Uploaded {docs.earb.uploadedAt}</p>}
+                      </div>
+                    </div>
+                    {(docs.earb.status === "Rejected" || docs.earb.status === "Uploaded") && (
+                      <label className="cursor-pointer">
+                        <Button size="sm" variant="outline" className="text-xs h-7 pointer-events-none">Re-upload</Button>
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = "";
+                          if (!f) return;
+                          if (!f.type.startsWith("image/")) { toast.error("Only image files are accepted (JPG, PNG, WEBP, etc.)"); return; }
+                          uploadDoc("earb", f);
+                        }} />
+                      </label>
+                    )}
                   </div>
                 ) : (
                   <label className="w-full border-2 border-dashed border-border hover:border-secondary/60 rounded-lg p-6 flex flex-col items-center gap-2 transition-colors cursor-pointer">
                     <Upload className="h-6 w-6 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">Click to upload EARB certificate</p>
-                    <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadDoc("earb", f); }} />
+                    <p className="text-xs text-muted-foreground">Click to upload EARB certificate image</p>
+                    <p className="text-[10px] text-muted-foreground/70">JPG, PNG, WEBP accepted</p>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!f) return;
+                      if (!f.type.startsWith("image/")) {
+                        toast.error("Only image files are accepted (JPG, PNG, WEBP, etc.)");
+                        return;
+                      }
+                      uploadDoc("earb", f);
+                    }} />
                   </label>
                 )}
                 <div className="space-y-1.5">

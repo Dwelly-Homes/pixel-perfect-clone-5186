@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, MapPin, BadgeCheck, Shield, Heart, Share2,
-  Check, ChevronLeft, ChevronRight, X, Send, Eye, Calendar
+  Check, ChevronLeft, ChevronRight, X, Send, Eye, Calendar,
+  Globe, Pencil, AlertTriangle,
 } from "lucide-react";
 import { MarketplaceNav } from "@/components/marketplace/MarketplaceNav";
 import { Footer } from "@/components/marketplace/Footer";
@@ -11,11 +12,16 @@ import { InquiryModal } from "@/components/marketplace/InquiryModal";
 import { ViewingModal } from "@/components/marketplace/ViewingModal";
 import { PropertyCard } from "@/components/marketplace/PropertyCard";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { transformProperty } from "@/lib/propertyTransform";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 export default function PropertyDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [currentImage, setCurrentImage] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [inquiryOpen, setInquiryOpen] = useState(false);
@@ -38,6 +44,19 @@ export default function PropertyDetail() {
       return (data.data || []).filter((p: { _id: string }) => p._id !== id);
     },
     enabled: !!rawProperty?.county,
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: (publish: boolean) =>
+      api.patch(`/properties/${id}`, {
+        status: publish ? "available" : "draft",
+        ...(publish ? { expiresAt: new Date(Date.now() + 90 * 86400000).toISOString() } : {}),
+      }),
+    onSuccess: (_, publish) => {
+      queryClient.invalidateQueries({ queryKey: ["property", id] });
+      toast.success(publish ? "Property published!" : "Property unpublished");
+    },
+    onError: () => toast.error("Failed to update property status"),
   });
 
   if (isLoading) {
@@ -69,6 +88,14 @@ export default function PropertyDetail() {
   const formattedPrice = new Intl.NumberFormat("en-KE").format(property.price);
   const relatedProperties = relatedRaw.slice(0, 4).map(transformProperty);
 
+  // Detect if the logged-in user owns this property
+  const ownerTenantId = typeof rawProperty.tenantId === "object"
+    ? rawProperty.tenantId?._id?.toString()
+    : rawProperty.tenantId?.toString();
+  const isOwner = !!(user?.tenantId && user.tenantId === ownerTenantId);
+  const isDraft = rawProperty.status === "draft";
+  const isExpired = rawProperty.status === "expired";
+
   const nextImage = () => setCurrentImage((i) => (i + 1) % property.images.length);
   const prevImage = () => setCurrentImage((i) => (i - 1 + property.images.length) % property.images.length);
 
@@ -80,6 +107,20 @@ export default function PropertyDetail() {
         <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground font-body mb-4">
           <ArrowLeft className="h-4 w-4" /> Back to marketplace
         </Link>
+
+        {isOwner && (
+          <div className="flex items-center gap-3 mb-4 p-3 rounded-lg border bg-amber-50 border-amber-200 text-amber-800 text-sm font-body">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+            <span className="flex-1">
+              {isDraft ? "This property is a draft and not visible to the public." : isExpired ? "This listing has expired." : "You are viewing your own listing."}
+            </span>
+            <Link to={`/dashboard/properties/${rawProperty._id}/edit`} className="shrink-0">
+              <Button size="sm" variant="outline" className="h-7 text-xs border-amber-400 text-amber-800 hover:bg-amber-100">
+                <Pencil className="h-3 w-3 mr-1" /> Edit
+              </Button>
+            </Link>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left column */}
@@ -211,50 +252,95 @@ export default function PropertyDetail() {
             </div>
           </div>
 
-          {/* Right column — Agent + Contact */}
+          {/* Right column — Agent + Contact / Owner Actions */}
           <div className="space-y-4">
             <div className="sticky top-20 space-y-4">
-              <div className="rounded-xl border border-border bg-card p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg">
-                    {property.agent.name.charAt(0)}
+              {isOwner ? (
+                <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+                  <p className="text-sm font-heading font-semibold">Your Listing</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${
+                      rawProperty.status === "available" ? "bg-green-100 text-green-700" :
+                      rawProperty.status === "draft" ? "bg-amber-100 text-amber-700" :
+                      rawProperty.status === "expired" ? "bg-red-100 text-red-700" :
+                      "bg-gray-100 text-gray-600"
+                    }`}>{rawProperty.status}</span>
                   </div>
-                  <div>
-                    <Link to={`/marketplace/agents/${property.agent.slug}`} className="font-heading font-semibold text-foreground hover:text-secondary transition-colors">
-                      {property.agent.agency}
+                  <div className="space-y-2">
+                    {isDraft && (
+                      <button
+                        onClick={() => publishMutation.mutate(true)}
+                        disabled={publishMutation.isPending}
+                        className="w-full flex items-center justify-center gap-2 rounded-md bg-secondary py-2.5 text-sm font-body font-medium text-secondary-foreground hover:bg-orange-dark transition-colors disabled:opacity-60"
+                      >
+                        <Globe className="h-4 w-4" />
+                        {publishMutation.isPending ? "Publishing…" : "Publish Listing"}
+                      </button>
+                    )}
+                    {rawProperty.status === "available" && (
+                      <button
+                        onClick={() => publishMutation.mutate(false)}
+                        disabled={publishMutation.isPending}
+                        className="w-full flex items-center justify-center gap-2 rounded-md border border-border py-2.5 text-sm font-body font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-60"
+                      >
+                        {publishMutation.isPending ? "Updating…" : "Unpublish"}
+                      </button>
+                    )}
+                    <Link to={`/dashboard/properties/${rawProperty._id}/edit`} className="block">
+                      <button className="w-full flex items-center justify-center gap-2 rounded-md border border-primary py-2.5 text-sm font-body font-medium text-primary hover:bg-primary hover:text-primary-foreground transition-colors">
+                        <Pencil className="h-4 w-4" /> Edit Property
+                      </button>
                     </Link>
-                    <p className="text-xs text-muted-foreground font-body">{property.agent.name}</p>
+                    <Link to="/dashboard/properties" className="block">
+                      <button className="w-full flex items-center justify-center gap-2 rounded-md border border-border py-2.5 text-sm font-body font-medium text-muted-foreground hover:bg-muted transition-colors">
+                        ← Back to My Properties
+                      </button>
+                    </Link>
                   </div>
                 </div>
-                <div className="space-y-2 mb-4">
-                  {property.agent.verified && (
-                    <div className="flex items-center gap-2 text-xs font-body text-muted-foreground">
-                      <BadgeCheck className="h-4 w-4 text-info" /> Verified Agent
+              ) : (
+                <div className="rounded-xl border border-border bg-card p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg">
+                      {property.agent.name.charAt(0)}
                     </div>
-                  )}
-                  {property.agent.earbLicensed && (
-                    <div className="flex items-center gap-2 text-xs font-body text-muted-foreground">
-                      <Shield className="h-4 w-4 text-success" /> EARB Licensed
+                    <div>
+                      <Link to={`/marketplace/agents/${property.agent.slug}`} className="font-heading font-semibold text-foreground hover:text-secondary transition-colors">
+                        {property.agent.agency}
+                      </Link>
+                      <p className="text-xs text-muted-foreground font-body">{property.agent.name}</p>
                     </div>
-                  )}
-                  <div className="text-xs font-body text-muted-foreground">Member since {property.agent.memberSince}</div>
-                  <div className="text-xs font-body text-muted-foreground">Responds within {property.agent.responseRate}</div>
+                  </div>
+                  <div className="space-y-2 mb-4">
+                    {property.agent.verified && (
+                      <div className="flex items-center gap-2 text-xs font-body text-muted-foreground">
+                        <BadgeCheck className="h-4 w-4 text-info" /> Verified Agent
+                      </div>
+                    )}
+                    {property.agent.earbLicensed && (
+                      <div className="flex items-center gap-2 text-xs font-body text-muted-foreground">
+                        <Shield className="h-4 w-4 text-success" /> EARB Licensed
+                      </div>
+                    )}
+                    <div className="text-xs font-body text-muted-foreground">Member since {property.agent.memberSince}</div>
+                    <div className="text-xs font-body text-muted-foreground">Responds within {property.agent.responseRate}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setInquiryOpen(true)}
+                      className="w-full flex items-center justify-center gap-2 rounded-md bg-secondary py-2.5 text-sm font-body font-medium text-secondary-foreground hover:bg-orange-dark transition-colors"
+                    >
+                      <Send className="h-4 w-4" /> Send Inquiry
+                    </button>
+                    <button
+                      onClick={() => setViewingOpen(true)}
+                      className="w-full flex items-center justify-center gap-2 rounded-md border border-primary py-2.5 text-sm font-body font-medium text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+                    >
+                      <Calendar className="h-4 w-4" /> Request Viewing
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => setInquiryOpen(true)}
-                    className="w-full flex items-center justify-center gap-2 rounded-md bg-secondary py-2.5 text-sm font-body font-medium text-secondary-foreground hover:bg-orange-dark transition-colors"
-                  >
-                    <Send className="h-4 w-4" /> Send Inquiry
-                  </button>
-                  <button
-                    onClick={() => setViewingOpen(true)}
-                    className="w-full flex items-center justify-center gap-2 rounded-md border border-primary py-2.5 text-sm font-body font-medium text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
-                  >
-                    <Calendar className="h-4 w-4" /> Request Viewing
-                  </button>
-                </div>
-              </div>
+              )}
 
               <div className="rounded-xl border border-border bg-card p-5 grid grid-cols-2 gap-4">
                 <div>
@@ -271,7 +357,11 @@ export default function PropertyDetail() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-body">Status</p>
-                  <Badge className="bg-success text-success-foreground text-xs mt-0.5">Available</Badge>
+                  <Badge className={`text-xs mt-0.5 capitalize ${
+                    rawProperty.status === "available" ? "bg-success text-success-foreground" :
+                    rawProperty.status === "draft" ? "bg-amber-100 text-amber-800 border-0" :
+                    "bg-muted text-muted-foreground border-0"
+                  }`}>{rawProperty.status}</Badge>
                 </div>
               </div>
             </div>
