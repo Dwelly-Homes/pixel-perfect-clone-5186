@@ -80,7 +80,20 @@ export function clearAuth() {
 
 export function getApiError(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    return err.response?.data?.message || err.message || "Something went wrong";
+    const data = err.response?.data as
+      | {
+          message?: string;
+          errors?: Array<{ msg?: string }>;
+        }
+      | undefined;
+
+    const mainMessage = data?.message || err.message || "Something went wrong";
+    const otherMessages =
+      data?.errors
+        ?.map((error) => error.msg?.trim())
+        .filter((message): message is string => Boolean(message && message !== mainMessage)) || [];
+
+    return otherMessages.length > 0 ? `${mainMessage}: ${otherMessages.join(", ")}` : mainMessage;
   }
   return "Something went wrong";
 }

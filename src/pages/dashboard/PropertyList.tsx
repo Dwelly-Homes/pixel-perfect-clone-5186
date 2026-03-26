@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Plus, Search, MoreHorizontal, Pencil, Trash2, Eye, ArrowUpDown, ChevronLeft, ChevronRight,
+  Plus, Search, MoreHorizontal, Pencil, Trash2, Eye, ArrowUpDown, ChevronLeft, ChevronRight, Globe, EyeOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,19 @@ export default function PropertyList() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["myProperties"] });
       toast.success("Property deleted successfully");
+    },
+    onError: (err) => toast.error(getApiError(err)),
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: ({ id, publish }: { id: string; publish: boolean }) =>
+      api.patch(`/properties/${id}`, {
+        status: publish ? "available" : "draft",
+        ...(publish ? { expiresAt: new Date(Date.now() + 90 * 86400000).toISOString() } : {}),
+      }),
+    onSuccess: (_, { publish }) => {
+      queryClient.invalidateQueries({ queryKey: ["myProperties"] });
+      toast.success(publish ? "Property published successfully" : "Property unpublished");
     },
     onError: (err) => toast.error(getApiError(err)),
   });
@@ -217,7 +230,7 @@ export default function PropertyList() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
                             <Link to={`/marketplace/${rawProp._id}`}>
-                              <Eye className="h-4 w-4 mr-2" /> View
+                              <Eye className="h-4 w-4 mr-2" /> Preview
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
@@ -225,6 +238,23 @@ export default function PropertyList() {
                               <Pencil className="h-4 w-4 mr-2" /> Edit
                             </Link>
                           </DropdownMenuItem>
+                          {rawProp.status === "draft" && (
+                            <DropdownMenuItem
+                              onClick={() => publishMutation.mutate({ id: rawProp._id, publish: true })}
+                              disabled={publishMutation.isPending}
+                            >
+                              <Globe className="h-4 w-4 mr-2 text-green-600" />
+                              <span className="text-green-700 font-medium">Publish</span>
+                            </DropdownMenuItem>
+                          )}
+                          {rawProp.status === "available" && (
+                            <DropdownMenuItem
+                              onClick={() => publishMutation.mutate({ id: rawProp._id, publish: false })}
+                              disabled={publishMutation.isPending}
+                            >
+                              <EyeOff className="h-4 w-4 mr-2" /> Unpublish
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             className="text-destructive"
                             onClick={() => handleDelete(rawProp)}
