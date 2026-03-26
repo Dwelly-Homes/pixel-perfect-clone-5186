@@ -80,7 +80,7 @@ export default function Notifications() {
     },
   });
 
-  const notifications = Array.isArray(data?.data) ? data.data : [];
+  const notifications = Array.isArray(data?.data?.notifications) ? data.data.notifications : [];
   const filtered = filterNotifs(notifications, tab);
   const unread = notifications.filter((n: { isRead: boolean }) => !n.isRead).length;
 
@@ -161,7 +161,7 @@ export default function Notifications() {
         )}
       </div>
 
-      {data?.pagination && data.pagination.page < data.pagination.pages && (
+      {data?.meta && data.meta.page < data.meta.totalPages && (
         <div className="text-center">
           <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)}>
             Load more

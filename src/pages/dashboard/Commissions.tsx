@@ -32,7 +32,7 @@ export default function Commissions() {
   const { data, isLoading } = useQuery({
     queryKey: ["commissions"],
     queryFn: async () => {
-      const { data } = await api.get("/payment/commissions?limit=50");
+      const { data } = await api.get("/payments/commissions?limit=50");
       return data.data || [];
     },
   });

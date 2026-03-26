@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import type { UserRole } from "@/contexts/AuthContext";
 import Index from "./pages/Index.tsx";
 import PropertyDetail from "./pages/PropertyDetail.tsx";
 import Login from "./pages/Login.tsx";
@@ -59,6 +60,13 @@ import AdminBilling from "./pages/admin/AdminBilling.tsx";
 
 const queryClient = new QueryClient();
 
+function RoleGuard({ roles, children }: { roles: UserRole[]; children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!user || !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -91,21 +99,21 @@ const App = () => (
           <Route path="/landlord/inquiries" element={<LandlordInquiries />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
-            <Route path="properties" element={<PropertyList />} />
-            <Route path="properties/new" element={<PropertyForm />} />
-            <Route path="properties/:id/edit" element={<PropertyForm />} />
-            <Route path="properties/:id/media" element={<PropertyMedia />} />
-            <Route path="team" element={<TeamMembers />} />
-            <Route path="team/invite" element={<InviteMember />} />
-            <Route path="inquiries" element={<Inquiries />} />
-            <Route path="viewings" element={<Viewings />} />
+            <Route path="properties" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><PropertyList /></RoleGuard>} />
+            <Route path="properties/new" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><PropertyForm /></RoleGuard>} />
+            <Route path="properties/:id/edit" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><PropertyForm /></RoleGuard>} />
+            <Route path="properties/:id/media" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><PropertyMedia /></RoleGuard>} />
+            <Route path="team" element={<RoleGuard roles={["tenant_admin"]}><TeamMembers /></RoleGuard>} />
+            <Route path="team/invite" element={<RoleGuard roles={["tenant_admin"]}><InviteMember /></RoleGuard>} />
+            <Route path="inquiries" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><Inquiries /></RoleGuard>} />
+            <Route path="viewings" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><Viewings /></RoleGuard>} />
             <Route path="notifications" element={<Notifications />} />
-            <Route path="verification" element={<Verification />} />
-            <Route path="commissions" element={<Commissions />} />
-            <Route path="billing" element={<Billing />} />
-            <Route path="billing/plans" element={<BillingPlans />} />
-            <Route path="billing/history" element={<BillingHistory />} />
-            <Route path="settings/organization" element={<OrganizationSettings />} />
+            <Route path="verification" element={<RoleGuard roles={["tenant_admin"]}><Verification /></RoleGuard>} />
+            <Route path="commissions" element={<RoleGuard roles={["tenant_admin"]}><Commissions /></RoleGuard>} />
+            <Route path="billing" element={<RoleGuard roles={["tenant_admin"]}><Billing /></RoleGuard>} />
+            <Route path="billing/plans" element={<RoleGuard roles={["tenant_admin"]}><BillingPlans /></RoleGuard>} />
+            <Route path="billing/history" element={<RoleGuard roles={["tenant_admin"]}><BillingHistory /></RoleGuard>} />
+            <Route path="settings/organization" element={<RoleGuard roles={["tenant_admin"]}><OrganizationSettings /></RoleGuard>} />
           </Route>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
