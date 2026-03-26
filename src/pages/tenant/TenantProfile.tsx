@@ -1,84 +1,148 @@
-import { useState } from "react";
-import { User, Camera, Lock, Bell, Shield, Save, Eye, EyeOff, Trash2, FileText, CheckCircle2, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { User, Camera, Lock, Bell, Shield, Save, Eye, EyeOff, Trash2, FileText, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
-const DOCS = [
-  { id: "national-id", label: "National ID", status: "Verified", filename: "national_id.jpg" },
-  { id: "payslip", label: "Payslip", status: "Verified", filename: "payslip_may2024.pdf" },
-  { id: "bank-statement", label: "Bank Statement", status: "Uploaded", filename: "bank_stmt_q2.pdf" },
-  { id: "reference", label: "Reference Letter", status: "Not Uploaded", filename: "" },
-];
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const docStatusColors: Record<string, string> = {
-  Verified: "bg-green-100 text-green-700",
-  Uploaded: "bg-yellow-100 text-yellow-700",
-  "Not Uploaded": "bg-gray-100 text-gray-500",
-};
+interface UserProfile {
+  _id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  occupation: string | null;
+  employer: string | null;
+  bio: string | null;
+  isPhoneVerified: boolean;
+  notificationPreferences: {
+    inquiry: boolean;
+    verification: boolean;
+    property: boolean;
+    payment: boolean;
+    earb: boolean;
+    system: boolean;
+  };
+}
 
-const TABS = ["Profile", "Security", "Documents", "Notifications"] as const;
+const TABS = ["Profile", "Security", "Notifications"] as const;
+
+function initials(name?: string) {
+  if (!name) return "?";
+  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TenantProfile() {
   const { toast } = useToast();
+  const { user: authUser, setAuth } = useAuth();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<typeof TABS[number]>("Profile");
-  const [saving, setSaving] = useState(false);
 
-  // Profile
-  const [name, setName] = useState("James Mwangi");
-  const [email, setEmail] = useState("james.mwangi@gmail.com");
-  const [phone, setPhone] = useState("+254 712 345 678");
-  const [bio, setBio] = useState("Software Engineer based in Nairobi. Looking for a quiet 2-bedroom in Kilimani or Lavington.");
-  const [occupation, setOccupation] = useState("Software Engineer");
-  const [employer, setEmployer] = useState("Safaricom PLC");
+  // ── Fetch profile ──
+  const { data: profile, isLoading } = useQuery<UserProfile>({
+    queryKey: ["myProfile"],
+    queryFn: async () => {
+      const { data } = await api.get("/auth/me");
+      return data?.data as UserProfile;
+    },
+  });
 
-  // Security
+  // ── Profile form state ──
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [occupation, setOccupation] = useState("");
+  const [employer, setEmployer] = useState("");
+  const [bio, setBio] = useState("");
+
+  useEffect(() => {
+    if (profile) {
+      setName(profile.fullName ?? "");
+      setPhone(profile.phone ?? "");
+      setOccupation(profile.occupation ?? "");
+      setEmployer(profile.employer ?? "");
+      setBio(profile.bio ?? "");
+    }
+  }, [profile]);
+
+  // ── Save profile ──
+  const saveProfile = useMutation({
+    mutationFn: () =>
+      api.patch("/auth/me", { fullName: name, occupation, employer, bio }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+      // Update auth context if name changed
+      if (authUser && res.data?.data) {
+        const updated = res.data.data;
+        const stored = JSON.parse(localStorage.getItem("user") ?? "{}");
+        const merged = { ...stored, fullName: updated.fullName };
+        localStorage.setItem("user", JSON.stringify(merged));
+      }
+      toast({ title: "Profile saved successfully" });
+    },
+    onError: () => toast({ title: "Failed to save profile", variant: "destructive" }),
+  });
+
+  // ── Security ──
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [showPw, setShowPw] = useState(false);
 
-  // Notifications
-  const [notifPrefs, setNotifPrefs] = useState({
-    paymentReminders: true,
-    viewingConfirmations: true,
-    agentReplies: true,
-    propertyAlerts: true,
-    priceDrops: false,
-    newListings: false,
-    marketingEmails: false,
+  const changePassword = useMutation({
+    mutationFn: () =>
+      api.post("/auth/change-password", { currentPassword: currentPw, newPassword: newPw }),
+    onSuccess: () => {
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
+      toast({ title: "Password changed successfully" });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to change password";
+      toast({ title: msg, variant: "destructive" });
+    },
   });
 
-  function save() {
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      toast({ title: "Changes saved successfully" });
-    }, 1000);
-  }
-
-  function savePassword() {
+  function handleChangePassword() {
     if (newPw !== confirmPw) {
-      toast({ title: "Passwords don't match", variant: "destructive" });
-      return;
+      toast({ title: "Passwords don't match", variant: "destructive" }); return;
     }
     if (newPw.length < 8) {
-      toast({ title: "Password must be at least 8 characters", variant: "destructive" });
-      return;
+      toast({ title: "Password must be at least 8 characters", variant: "destructive" }); return;
     }
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      setCurrentPw(""); setNewPw(""); setConfirmPw("");
-      toast({ title: "Password updated successfully" });
-    }, 1000);
+    changePassword.mutate();
   }
+
+  // ── Notification preferences ──
+  const [notifPrefs, setNotifPrefs] = useState({
+    inquiry: true, verification: true, property: true,
+    payment: true, earb: true, system: true,
+  });
+
+  useEffect(() => {
+    if (profile?.notificationPreferences) {
+      setNotifPrefs(profile.notificationPreferences);
+    }
+  }, [profile]);
+
+  const saveNotifPrefs = useMutation({
+    mutationFn: () => api.patch("/notifications/preferences", notifPrefs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["myProfile"] });
+      toast({ title: "Notification preferences saved" });
+    },
+    onError: () => toast({ title: "Failed to save preferences", variant: "destructive" }),
+  });
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -88,107 +152,188 @@ export default function TenantProfile() {
       </div>
 
       {/* Avatar */}
-      <div className="flex items-center gap-5">
-        <div className="relative">
-          <div className="h-20 w-20 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-heading font-bold text-2xl">
-            JM
+      {isLoading ? (
+        <div className="flex items-center gap-5">
+          <Skeleton className="h-20 w-20 rounded-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-36" />
+            <Skeleton className="h-3 w-52" />
+            <Skeleton className="h-5 w-24 rounded-full" />
           </div>
-          <button className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow hover:bg-primary/90">
-            <Camera className="h-3.5 w-3.5" />
-          </button>
         </div>
-        <div>
-          <p className="font-semibold font-heading">{name}</p>
-          <p className="text-sm text-muted-foreground">{email}</p>
-          <Badge className="mt-1 bg-green-100 text-green-700 border-0 text-xs">Verified Tenant</Badge>
+      ) : (
+        <div className="flex items-center gap-5">
+          <div className="relative">
+            <div className="h-20 w-20 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-heading font-bold text-2xl">
+              {initials(profile?.fullName)}
+            </div>
+            <button className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow hover:bg-primary/90">
+              <Camera className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div>
+            <p className="font-semibold font-heading">{profile?.fullName ?? "—"}</p>
+            <p className="text-sm text-muted-foreground">{profile?.email ?? "—"}</p>
+            {profile?.isPhoneVerified && (
+              <Badge className="mt-1 bg-green-100 text-green-700 border-0 text-xs">
+                <CheckCircle2 className="h-3 w-3 mr-1" />Verified
+              </Badge>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Tab nav */}
       <div className="flex border-b">
         {TABS.map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={cn("px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5",
+            className={cn(
+              "px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5",
               tab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             )}>
-            {t === "Profile" && <User className="h-3.5 w-3.5" />}
-            {t === "Security" && <Lock className="h-3.5 w-3.5" />}
-            {t === "Documents" && <FileText className="h-3.5 w-3.5" />}
+            {t === "Profile"       && <User className="h-3.5 w-3.5" />}
+            {t === "Security"      && <Lock className="h-3.5 w-3.5" />}
             {t === "Notifications" && <Bell className="h-3.5 w-3.5" />}
             {t}
           </button>
         ))}
       </div>
 
-      {/* Profile Tab */}
+      {/* ── Profile Tab ── */}
       {tab === "Profile" && (
         <div className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Full Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
+          {isLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-9 w-full" />
+                </div>
+              ))}
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Email Address</Label>
-              <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Phone Number</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Occupation</Label>
-              <Input value={occupation} onChange={(e) => setOccupation(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Employer</Label>
-              <Input value={employer} onChange={(e) => setEmployer(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Bio</Label>
-            <Textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} className="resize-none text-sm" placeholder="Tell landlords about yourself…" />
-          </div>
-          <Button onClick={save} disabled={saving} className="bg-secondary hover:bg-secondary/90">
-            {saving ? <span className="flex items-center gap-2"><span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving…</span> : <><Save className="h-4 w-4 mr-2" />Save Changes</>}
-          </Button>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Full Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Email Address</Label>
+                  <Input value={profile?.email ?? ""} disabled className="bg-muted" />
+                  <p className="text-[10px] text-muted-foreground">Email cannot be changed here.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Phone Number</Label>
+                  <Input value={phone} disabled className="bg-muted" />
+                  <p className="text-[10px] text-muted-foreground">Phone cannot be changed here.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Occupation</Label>
+                  <Input value={occupation} onChange={(e) => setOccupation(e.target.value)} placeholder="e.g. Software Engineer" />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label className="text-xs">Employer</Label>
+                  <Input value={employer} onChange={(e) => setEmployer(e.target.value)} placeholder="e.g. Safaricom PLC" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Bio</Label>
+                <Textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  rows={3}
+                  className="resize-none text-sm"
+                  placeholder="Tell landlords a bit about yourself…"
+                  maxLength={500}
+                />
+                <p className="text-[10px] text-muted-foreground text-right">{bio.length}/500</p>
+              </div>
+              <Button
+                onClick={() => saveProfile.mutate()}
+                disabled={saveProfile.isPending}
+                className="bg-secondary hover:bg-secondary/90"
+              >
+                {saveProfile.isPending
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
+                  : <><Save className="h-4 w-4 mr-2" />Save Changes</>}
+              </Button>
+            </>
+          )}
         </div>
       )}
 
-      {/* Security Tab */}
+      {/* ── Security Tab ── */}
       {tab === "Security" && (
         <div className="space-y-5">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2"><Lock className="h-4 w-4" />Change Password</CardTitle></CardHeader>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Lock className="h-4 w-4" />Change Password
+              </CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Current Password</Label>
                 <div className="relative">
-                  <Input type={showPw ? "text" : "password"} value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} className="pr-10" />
-                  <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPw(!showPw)}>
+                  <Input
+                    type={showPw ? "text" : "password"}
+                    value={currentPw}
+                    onChange={(e) => setCurrentPw(e.target.value)}
+                    className="pr-10"
+                  />
+                  <button
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    onClick={() => setShowPw(!showPw)}
+                  >
                     {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">New Password</Label>
-                <Input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Minimum 8 characters" />
+                <Input
+                  type="password"
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  placeholder="Minimum 8 characters"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Confirm New Password</Label>
-                <Input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
+                <Input
+                  type="password"
+                  value={confirmPw}
+                  onChange={(e) => setConfirmPw(e.target.value)}
+                />
               </div>
-              <Button onClick={savePassword} disabled={saving || !currentPw || !newPw} className="bg-secondary hover:bg-secondary/90">
-                Update Password
+              <Button
+                onClick={handleChangePassword}
+                disabled={changePassword.isPending || !currentPw || !newPw || !confirmPw}
+                className="bg-secondary hover:bg-secondary/90"
+              >
+                {changePassword.isPending
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Updating…</>
+                  : "Update Password"}
               </Button>
             </CardContent>
           </Card>
 
           <Card className="border-destructive/30">
-            <CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-destructive flex items-center gap-2"><Shield className="h-4 w-4" />Danger Zone</CardTitle></CardHeader>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-destructive flex items-center gap-2">
+                <Shield className="h-4 w-4" />Danger Zone
+              </CardTitle>
+            </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">Permanently delete your account and all associated data. This action cannot be undone.</p>
-              <Button variant="destructive" size="sm" onClick={() => toast({ title: "Please contact support to delete your account.", variant: "destructive" })}>
+              <p className="text-sm text-muted-foreground mb-3">
+                Permanently delete your account and all associated data. This action cannot be undone.
+              </p>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => toast({ title: "Please contact support to delete your account.", variant: "destructive" })}
+              >
                 <Trash2 className="h-4 w-4 mr-2" />Delete Account
               </Button>
             </CardContent>
@@ -196,68 +341,50 @@ export default function TenantProfile() {
         </div>
       )}
 
-      {/* Documents Tab */}
-      {tab === "Documents" && (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Verified documents help landlords and agents trust you faster.</p>
-          {DOCS.map((doc) => (
-            <Card key={doc.id} className={cn("border", doc.status === "Verified" && "border-green-200 bg-green-50/30")}>
-              <CardContent className="p-4 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
-                    doc.status === "Verified" ? "bg-green-100" : doc.status === "Uploaded" ? "bg-yellow-100" : "bg-muted"
-                  )}>
-                    {doc.status === "Verified" ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <FileText className="h-4 w-4 text-muted-foreground" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{doc.label}</p>
-                    {doc.filename && <p className="text-xs text-muted-foreground">{doc.filename}</p>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", docStatusColors[doc.status])}>{doc.status}</span>
-                  {doc.status === "Not Uploaded" ? (
-                    <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => toast({ title: "Upload feature", description: "Upload your " + doc.label })}>
-                      Upload
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => toast({ title: "Re-upload", description: doc.label })}>
-                      Re-upload
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Notifications Tab */}
+      {/* ── Notifications Tab ── */}
       {tab === "Notifications" && (
         <div className="space-y-5">
-          {[
-            { key: "paymentReminders", label: "Rent payment reminders", desc: "Get notified before your rent is due" },
-            { key: "viewingConfirmations", label: "Viewing confirmations", desc: "Confirmation when a viewing is approved or cancelled" },
-            { key: "agentReplies", label: "Agent replies", desc: "When an agent responds to your inquiry or message" },
-            { key: "propertyAlerts", label: "Property status alerts", desc: "When a saved property becomes unavailable or changes" },
-            { key: "priceDrops", label: "Price drops", desc: "When a saved property drops in price" },
-            { key: "newListings", label: "New listings", desc: "New properties matching your preferences" },
-            { key: "marketingEmails", label: "Marketing emails", desc: "Tips, property guides and platform news" },
-          ].map((item) => (
-            <div key={item.key} className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">{item.label}</p>
-                <p className="text-xs text-muted-foreground">{item.desc}</p>
+          {isLoading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between gap-4">
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-3 w-40" />
+                  <Skeleton className="h-3 w-56" />
+                </div>
+                <Skeleton className="h-5 w-9 rounded-full" />
               </div>
-              <Switch
-                checked={notifPrefs[item.key as keyof typeof notifPrefs]}
-                onCheckedChange={(v) => setNotifPrefs((p) => ({ ...p, [item.key]: v }))}
-              />
-            </div>
-          ))}
-          <Button onClick={save} disabled={saving} className="bg-secondary hover:bg-secondary/90">
-            <Save className="h-4 w-4 mr-2" />Save Preferences
-          </Button>
+            ))
+          ) : (
+            <>
+              {([
+                { key: "inquiry",      label: "Inquiry notifications",    desc: "When an agent responds to your inquiry" },
+                { key: "property",     label: "Property updates",         desc: "When a saved property changes or becomes unavailable" },
+                { key: "payment",      label: "Payment reminders",        desc: "Upcoming rent and payment due reminders" },
+                { key: "verification", label: "Verification updates",     desc: "Status changes on your account verification" },
+                { key: "system",       label: "System notifications",     desc: "Platform updates, tips and announcements" },
+              ] as { key: keyof typeof notifPrefs; label: string; desc: string }[]).map((item) => (
+                <div key={item.key} className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">{item.desc}</p>
+                  </div>
+                  <Switch
+                    checked={notifPrefs[item.key]}
+                    onCheckedChange={(v) => setNotifPrefs((p) => ({ ...p, [item.key]: v }))}
+                  />
+                </div>
+              ))}
+              <Button
+                onClick={() => saveNotifPrefs.mutate()}
+                disabled={saveNotifPrefs.isPending}
+                className="bg-secondary hover:bg-secondary/90"
+              >
+                {saveNotifPrefs.isPending
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
+                  : <><Save className="h-4 w-4 mr-2" />Save Preferences</>}
+              </Button>
+            </>
+          )}
         </div>
       )}
     </div>

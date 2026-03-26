@@ -1,17 +1,45 @@
 import { Heart, MapPin, BadgeCheck, Shield, BedDouble } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Property } from "@/data/properties";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 interface PropertyCardProps {
   property: Property;
 }
 
 export function PropertyCard({ property }: PropertyCardProps) {
+  const { isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
   const [favorited, setFavorited] = useState(false);
 
   const formattedPrice = new Intl.NumberFormat("en-KE").format(property.price);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      favorited
+        ? api.delete(`/properties/${property.id}/save`)
+        : api.post(`/properties/${property.id}/save`),
+    onSuccess: () => {
+      setFavorited((v) => !v);
+      queryClient.invalidateQueries({ queryKey: ["savedProperties"] });
+      toast.success(favorited ? "Removed from saved" : "Property saved!");
+    },
+    onError: () => toast.error("Failed to update saved properties"),
+  });
+
+  function handleHeartClick(e: React.MouseEvent) {
+    e.preventDefault();
+    if (!isAuthenticated) {
+      toast.info("Please log in to save properties");
+      return;
+    }
+    saveMutation.mutate();
+  }
 
   return (
     <div className="group rounded-lg border border-border bg-card overflow-hidden transition-shadow hover:shadow-lg animate-fade-in">
@@ -38,12 +66,10 @@ export function PropertyCard({ property }: PropertyCardProps) {
         </div>
         {/* Favorite */}
         <button
-          onClick={(e) => {
-            e.preventDefault();
-            setFavorited(!favorited);
-          }}
-          className="absolute top-3 right-3 h-8 w-8 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center transition-colors hover:bg-card"
-          aria-label="Add to favorites"
+          onClick={handleHeartClick}
+          disabled={saveMutation.isPending}
+          className="absolute top-3 right-3 h-8 w-8 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center transition-colors hover:bg-card disabled:opacity-60"
+          aria-label="Save property"
         >
           <Heart
             className={`h-4 w-4 transition-colors ${

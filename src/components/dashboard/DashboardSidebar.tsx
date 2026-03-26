@@ -3,6 +3,7 @@ import {
   Building2,
   Plus,
   MessageSquare,
+  MessagesSquare,
   Bell,
   Users,
   BarChart3,
@@ -45,6 +46,7 @@ const mainNav: NavItem[] = [
   { title: "Add Property", url: "/dashboard/properties/new", icon: Plus, roles: ["tenant_admin", "agent_staff"] },
   { title: "Inquiries", url: "/dashboard/inquiries", icon: MessageSquare, roles: ["tenant_admin", "agent_staff"] },
   { title: "Viewings", url: "/dashboard/viewings", icon: Calendar, roles: ["tenant_admin", "agent_staff"] },
+  { title: "Messages", url: "/dashboard/chat", icon: MessagesSquare },
   { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
 ];
 

@@ -1,102 +1,92 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Home,
-  Bell,
-  Smartphone,
-  CheckCircle2,
-  Clock,
-  XCircle,
-  ArrowLeft,
-  Download,
-  CreditCard,
-  Receipt,
-  TrendingUp,
-  AlertTriangle,
-  Loader2,
-  ChevronRight,
-  FileText,
+  CreditCard, Search, MessageSquare, MapPin, Home,
+  Calendar, Phone, Mail, User, TrendingUp, Clock, CheckCircle2, AlertTriangle,
 } from "lucide-react";
+import { api } from "@/lib/api";
+import { format } from "date-fns";
 
-const paymentHistory = [
-  { id: "TXN-20250301", date: "Mar 01, 2025", property: "2BR Apartment, Kilimani", amount: "KES 65,000", method: "M-Pesa", mpesaCode: "SHL4K7X9QR", status: "completed" },
-  { id: "TXN-20250201", date: "Feb 01, 2025", property: "2BR Apartment, Kilimani", amount: "KES 65,000", method: "M-Pesa", mpesaCode: "QKL3M8N2WP", status: "completed" },
-  { id: "TXN-20250101", date: "Jan 01, 2025", property: "2BR Apartment, Kilimani", amount: "KES 65,000", method: "M-Pesa", mpesaCode: "RJH9T5V1XZ", status: "completed" },
-  { id: "TXN-20241201", date: "Dec 01, 2024", property: "2BR Apartment, Kilimani", amount: "KES 65,000", method: "M-Pesa", mpesaCode: "PLM6Y2C8BQ", status: "completed" },
-  { id: "TXN-20241101", date: "Nov 01, 2024", property: "2BR Apartment, Kilimani", amount: "KES 65,000", method: "M-Pesa", mpesaCode: "WNK4R7F3DT", status: "failed" },
-  { id: "TXN-20241002", date: "Nov 02, 2024", property: "2BR Apartment, Kilimani", amount: "KES 65,000", method: "M-Pesa", mpesaCode: "GHJ1S9L5MX", status: "completed" },
-];
+interface LeaseProperty {
+  _id: string;
+  title: string;
+  neighborhood: string;
+  county: string;
+  streetEstate?: string;
+  propertyType: string;
+  images: { url: string; isCover?: boolean }[];
+}
 
-const upcomingPayments = [
-  { property: "2BR Apartment, Kilimani", amount: 65000, dueDate: "Apr 01, 2025", daysLeft: 8, status: "upcoming" },
-];
+interface LeaseAgent {
+  fullName: string;
+  phone?: string;
+  email?: string;
+}
 
-type PaymentStep = "form" | "confirm" | "processing" | "success" | "failed";
+interface Lease {
+  _id: string;
+  occupantName: string;
+  monthlyRent: number;
+  depositAmount: number;
+  leaseStart: string;
+  leaseEnd: string | null;
+  status: "active" | "expired" | "terminated";
+  notes: string | null;
+  propertyId: LeaseProperty;
+  agentId: LeaseAgent;
+}
 
-const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof CheckCircle2 }> = {
-  completed: { label: "Completed", variant: "default", icon: CheckCircle2 },
-  pending: { label: "Pending", variant: "secondary", icon: Clock },
-  failed: { label: "Failed", variant: "destructive", icon: XCircle },
+const TYPE_LABEL: Record<string, string> = {
+  bedsitter: "Bedsitter", studio: "Studio", "1_bedroom": "1 Bedroom",
+  "2_bedroom": "2 Bedroom", "3_bedroom": "3 Bedroom",
+  "4_plus_bedroom": "4+ Bedroom", maisonette: "Maisonette",
+  bungalow: "Bungalow", townhouse: "Townhouse",
 };
 
 export default function TenantPayments() {
-  const [payModalOpen, setPayModalOpen] = useState(false);
-  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
-  const [selectedTxn, setSelectedTxn] = useState<typeof paymentHistory[0] | null>(null);
-  const [payStep, setPayStep] = useState<PaymentStep>("form");
-  const [phoneNumber, setPhoneNumber] = useState("0712345678");
-  const [paymentAmount, setPaymentAmount] = useState("65000");
-  const [selectedProperty, setSelectedProperty] = useState("2BR Apartment, Kilimani");
+  const { data: lease, isLoading } = useQuery<Lease | null>({
+    queryKey: ["myLease"],
+    queryFn: async () => {
+      const { data } = await api.get("/leases/my");
+      return data?.data as Lease | null;
+    },
+  });
 
-  const openPayModal = () => {
-    setPayStep("form");
-    setPayModalOpen(true);
-  };
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-heading text-2xl font-bold text-foreground">Payments</h1>
+          <p className="text-muted-foreground font-body text-sm">Track your rent payments and payment history.</p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
+          ))}
+        </div>
+        <Skeleton className="h-48 w-full rounded-xl" />
+      </div>
+    );
+  }
 
-  const handleConfirmPayment = () => {
-    setPayStep("processing");
-    setTimeout(() => {
-      setPayStep(Math.random() > 0.15 ? "success" : "failed");
-    }, 3000);
-  };
-
-  const openReceipt = (txn: typeof paymentHistory[0]) => {
-    setSelectedTxn(txn);
-    setReceiptModalOpen(true);
-  };
-
-  const totalPaid = paymentHistory.filter(p => p.status === "completed").reduce((sum) => sum + 65000, 0);
-  const pendingAmount = upcomingPayments.reduce((sum, p) => sum + p.amount, 0);
-
-  return (
-    <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="font-heading text-2xl font-bold text-foreground">Payments</h1>
-            <p className="text-muted-foreground font-body text-sm">Manage your rent payments via M-Pesa</p>
-          </div>
-          <Button className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-[hsl(var(--success-foreground))] font-body gap-2" onClick={openPayModal}>
-            <Smartphone className="h-4 w-4" />
-            Pay with M-Pesa
-          </Button>
+  if (!lease) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-heading text-2xl font-bold text-foreground">Payments</h1>
+          <p className="text-muted-foreground font-body text-sm">Track your rent payments and payment history.</p>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Total Paid", value: `KES ${totalPaid.toLocaleString()}`, icon: TrendingUp, iconColor: "text-[hsl(var(--success))]" },
-            { label: "Next Due", value: `KES ${pendingAmount.toLocaleString()}`, icon: Clock, iconColor: "text-secondary" },
-            { label: "Payments Made", value: paymentHistory.filter(p => p.status === "completed").length.toString(), icon: CheckCircle2, iconColor: "text-[hsl(var(--info))]" },
-            { label: "Due in 8 Days", value: "Apr 01", icon: AlertTriangle, iconColor: "text-[hsl(var(--warning))]" },
+            { label: "Total Paid",    value: "KES 0", icon: TrendingUp,   iconColor: "text-green-600" },
+            { label: "Next Due",      value: "—",      icon: Clock,        iconColor: "text-secondary" },
+            { label: "Payments Made", value: "0",      icon: CheckCircle2, iconColor: "text-blue-500" },
+            { label: "Upcoming",      value: "None",   icon: AlertTriangle,iconColor: "text-amber-500" },
           ].map((stat) => (
             <Card key={stat.label}>
               <CardContent className="p-4 flex items-center gap-3">
@@ -104,7 +94,7 @@ export default function TenantPayments() {
                   <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
                 </div>
                 <div>
-                  <p className="text-xl font-bold font-heading text-foreground">{stat.value}</p>
+                  <p className="text-xl font-bold font-heading">{stat.value}</p>
                   <p className="text-xs text-muted-foreground font-body">{stat.label}</p>
                 </div>
               </CardContent>
@@ -112,273 +102,199 @@ export default function TenantPayments() {
           ))}
         </div>
 
-        {/* Upcoming Payment Alert */}
-        {upcomingPayments.map((payment, i) => (
-          <Card key={i} className="border-secondary/30 bg-secondary/5">
-            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-secondary/20 flex items-center justify-center shrink-0">
-                  <CreditCard className="h-5 w-5 text-secondary" />
-                </div>
-                <div>
-                  <p className="font-body font-semibold text-foreground">{payment.property}</p>
-                  <p className="text-sm text-muted-foreground font-body">Due {payment.dueDate} · {payment.daysLeft} days left</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-lg font-bold font-heading text-secondary">KES {payment.amount.toLocaleString()}</span>
-                <Button size="sm" className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-[hsl(var(--success-foreground))] font-body" onClick={openPayModal}>
-                  Pay Now <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <Card className="border-blue-200 bg-blue-50/40">
+          <CardContent className="p-5 flex items-start gap-4">
+            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+              <Home className="h-5 w-5 text-blue-600" />
+            </div>
+            <div className="space-y-1">
+              <p className="font-semibold text-sm">Rent payments are handled directly with your landlord or agent</p>
+              <p className="text-sm text-muted-foreground font-body">
+                Once you move into a property sourced through Dwelly, your rent payment
+                history will appear here. Payment tracking is activated when your agent records your move-in date.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Payment History */}
-        <Tabs defaultValue="all" className="space-y-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-heading">Payment History</CardTitle>
+          </CardHeader>
+          <CardContent className="p-8 flex flex-col items-center text-center gap-4">
+            <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center">
+              <CreditCard className="h-7 w-7 text-muted-foreground opacity-40" />
+            </div>
+            <div>
+              <p className="font-medium text-sm">No payment records yet</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                Your payment history will appear here once you are in an active tenancy tracked on Dwelly.
+              </p>
+            </div>
+            <div className="flex gap-2 flex-wrap justify-center">
+              <Button size="sm" asChild className="bg-secondary hover:bg-secondary/90">
+                <Link to="/"><Search className="h-4 w-4 mr-2" />Browse Properties</Link>
+              </Button>
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/tenant/messages"><MessageSquare className="h-4 w-4 mr-2" />Message Agent</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── Active lease view ──────────────────────────────────────────────────────
+  const property = lease.propertyId;
+  const agent = lease.agentId;
+  const coverImage = property.images?.find((i) => i.isCover)?.url || property.images?.[0]?.url;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-heading text-2xl font-bold text-foreground">Payments</h1>
+        <p className="text-muted-foreground font-body text-sm">Your active tenancy and payment details.</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <TrendingUp className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-lg font-bold font-heading">KES {lease.monthlyRent.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground font-body">Monthly Rent</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <Clock className="h-5 w-5 text-secondary" />
+            </div>
+            <div>
+              <p className="text-lg font-bold font-heading">
+                {format(new Date(lease.leaseStart), "d MMM yyyy")}
+              </p>
+              <p className="text-xs text-muted-foreground font-body">Lease Start</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <CheckCircle2 className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-lg font-bold font-heading">KES {lease.depositAmount.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground font-body">Deposit Paid</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              <Calendar className="h-5 w-5 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-lg font-bold font-heading">
+                {lease.leaseEnd ? format(new Date(lease.leaseEnd), "d MMM yyyy") : "Open-ended"}
+              </p>
+              <p className="text-xs text-muted-foreground font-body">Lease End</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Property card */}
+      <Card>
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-heading text-lg font-semibold text-foreground">Payment History</h2>
-            <TabsList>
-              <TabsTrigger value="all" className="font-body text-sm">All</TabsTrigger>
-              <TabsTrigger value="completed" className="font-body text-sm">Completed</TabsTrigger>
-              <TabsTrigger value="failed" className="font-body text-sm">Failed</TabsTrigger>
-            </TabsList>
+            <CardTitle className="text-base font-heading">Your Property</CardTitle>
+            <Badge className="bg-green-100 text-green-700 border-0 text-xs">Active Tenancy</Badge>
           </div>
-
-          {(["all", "completed", "failed"] as const).map((tab) => (
-            <TabsContent key={tab} value={tab}>
-              <Card>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="font-body">Transaction</TableHead>
-                        <TableHead className="font-body hidden sm:table-cell">Property</TableHead>
-                        <TableHead className="font-body">Amount</TableHead>
-                        <TableHead className="font-body hidden md:table-cell">M-Pesa Code</TableHead>
-                        <TableHead className="font-body">Status</TableHead>
-                        <TableHead className="font-body text-right">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paymentHistory
-                        .filter(p => tab === "all" || p.status === tab)
-                        .map((txn) => {
-                          const config = statusConfig[txn.status];
-                          return (
-                            <TableRow key={txn.id}>
-                              <TableCell>
-                                <div>
-                                  <p className="font-body font-medium text-foreground">{txn.id}</p>
-                                  <p className="text-xs text-muted-foreground font-body">{txn.date}</p>
-                                </div>
-                              </TableCell>
-                              <TableCell className="hidden sm:table-cell font-body text-muted-foreground">{txn.property}</TableCell>
-                              <TableCell className="font-body font-semibold text-foreground">{txn.amount}</TableCell>
-                              <TableCell className="hidden md:table-cell font-body text-muted-foreground font-mono text-xs">{txn.mpesaCode}</TableCell>
-                              <TableCell>
-                                <Badge variant={config.variant} className="gap-1 font-body">
-                                  <config.icon className="h-3 w-3" />
-                                  {config.label}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {txn.status === "completed" ? (
-                                  <Button variant="ghost" size="sm" className="font-body text-secondary" onClick={() => openReceipt(txn)}>
-                                    <Receipt className="h-4 w-4 mr-1" /> Receipt
-                                  </Button>
-                                ) : (
-                                  <Button variant="ghost" size="sm" className="font-body text-muted-foreground" onClick={openPayModal}>
-                                    Retry
-                                  </Button>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          ))}
-        </Tabs>
-
-      {/* M-Pesa Payment Modal */}
-      <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          {payStep === "form" && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="font-heading flex items-center gap-2">
-                  <Smartphone className="h-5 w-5 text-[hsl(var(--success))]" />
-                  Pay with M-Pesa
-                </DialogTitle>
-                <DialogDescription className="font-body">Enter your M-Pesa details to initiate an STK push</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-body font-medium text-foreground">Property</label>
-                  <Select value={selectedProperty} onValueChange={setSelectedProperty}>
-                    <SelectTrigger className="font-body"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2BR Apartment, Kilimani" className="font-body">2BR Apartment, Kilimani</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-body font-medium text-foreground">M-Pesa Phone Number</label>
-                  <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="0712345678" className="font-body" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-body font-medium text-foreground">Amount (KES)</label>
-                  <Input value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} type="number" className="font-body text-lg font-bold" />
-                </div>
-                <Card className="bg-muted/50 border-border">
-                  <CardContent className="p-3 text-xs text-muted-foreground font-body space-y-1">
-                    <p>• An STK push will be sent to your phone</p>
-                    <p>• Enter your M-Pesa PIN to confirm</p>
-                    <p>• You'll receive an SMS confirmation from Safaricom</p>
-                  </CardContent>
-                </Card>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="flex flex-col sm:flex-row">
+            {coverImage && (
+              <div className="w-full sm:w-40 h-32 sm:h-auto shrink-0 overflow-hidden">
+                <img src={coverImage} alt={property.title} className="h-full w-full object-cover" />
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setPayModalOpen(false)} className="font-body">Cancel</Button>
-                <Button className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-[hsl(var(--success-foreground))] font-body" onClick={() => setPayStep("confirm")}>
-                  Continue
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-
-          {payStep === "confirm" && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="font-heading">Confirm Payment</DialogTitle>
-                <DialogDescription className="font-body">Review and confirm your payment details</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3 py-2">
-                {[
-                  { label: "Property", value: selectedProperty },
-                  { label: "Phone", value: phoneNumber },
-                  { label: "Amount", value: `KES ${Number(paymentAmount).toLocaleString()}` },
-                  { label: "Method", value: "M-Pesa STK Push" },
-                ].map((row) => (
-                  <div key={row.label} className="flex justify-between items-center py-2 border-b border-border last:border-0">
-                    <span className="text-sm text-muted-foreground font-body">{row.label}</span>
-                    <span className="text-sm font-semibold font-body text-foreground">{row.value}</span>
-                  </div>
-                ))}
+            )}
+            <div className="p-4 space-y-2 flex-1">
+              <div>
+                <p className="font-semibold font-heading">{property.title}</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" />
+                  {[property.streetEstate, property.neighborhood, property.county].filter(Boolean).join(", ")}
+                </p>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setPayStep("form")} className="font-body">Back</Button>
-                <Button className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-[hsl(var(--success-foreground))] font-body" onClick={handleConfirmPayment}>
-                  Send STK Push
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-
-          {payStep === "processing" && (
-            <div className="py-12 flex flex-col items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-[hsl(var(--success))]/10 flex items-center justify-center animate-pulse">
-                <Loader2 className="h-8 w-8 text-[hsl(var(--success))] animate-spin" />
-              </div>
-              <div className="text-center">
-                <h3 className="font-heading font-semibold text-lg text-foreground">STK Push Sent</h3>
-                <p className="text-sm text-muted-foreground font-body mt-1">Check your phone ({phoneNumber}) and enter your M-Pesa PIN</p>
-              </div>
-              <p className="text-xs text-muted-foreground font-body">Waiting for confirmation...</p>
+              <Badge variant="outline" className="text-xs">
+                {TYPE_LABEL[property.propertyType] ?? property.propertyType}
+              </Badge>
+              {lease.notes && (
+                <p className="text-xs text-muted-foreground bg-muted/40 rounded p-2">{lease.notes}</p>
+              )}
             </div>
-          )}
+          </div>
+        </CardContent>
+      </Card>
 
-          {payStep === "success" && (
-            <div className="py-10 flex flex-col items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-[hsl(var(--success))]/10 flex items-center justify-center">
-                <CheckCircle2 className="h-8 w-8 text-[hsl(var(--success))]" />
-              </div>
-              <div className="text-center">
-                <h3 className="font-heading font-semibold text-lg text-foreground">Payment Successful!</h3>
-                <p className="text-sm text-muted-foreground font-body mt-1">KES {Number(paymentAmount).toLocaleString()} paid via M-Pesa</p>
-                <p className="text-xs text-muted-foreground font-body font-mono mt-2">M-Pesa Code: SHL4K7X9QR</p>
-              </div>
-              <div className="flex gap-2 mt-2">
-                <Button variant="outline" className="font-body gap-1" onClick={() => setPayModalOpen(false)}>
-                  <FileText className="h-4 w-4" /> View Receipt
-                </Button>
-                <Button className="font-body" onClick={() => setPayModalOpen(false)}>Done</Button>
-              </div>
+      {/* Agent contact */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-heading">Your Agent</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-bold text-sm">
+              <User className="h-5 w-5" />
             </div>
-          )}
-
-          {payStep === "failed" && (
-            <div className="py-10 flex flex-col items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center">
-                <XCircle className="h-8 w-8 text-destructive" />
-              </div>
-              <div className="text-center">
-                <h3 className="font-heading font-semibold text-lg text-foreground">Payment Failed</h3>
-                <p className="text-sm text-muted-foreground font-body mt-1">The transaction was not completed. Please try again.</p>
-              </div>
-              <div className="flex gap-2 mt-2">
-                <Button variant="outline" className="font-body" onClick={() => setPayModalOpen(false)}>Cancel</Button>
-                <Button className="font-body" onClick={() => setPayStep("form")}>Try Again</Button>
-              </div>
+            <div>
+              <p className="font-medium text-sm">{agent.fullName}</p>
+              {agent.phone && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Phone className="h-3 w-3" /> {agent.phone}
+                </p>
+              )}
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Receipt Modal */}
-      <Dialog open={receiptModalOpen} onOpenChange={setReceiptModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-secondary" />
-              Payment Receipt
-            </DialogTitle>
-          </DialogHeader>
-          {selectedTxn && (
-            <div className="space-y-4">
-              <div className="text-center py-4 border-b border-border border-dashed">
-                <div className="h-12 w-12 rounded-lg bg-primary flex items-center justify-center mx-auto mb-2">
-                  <Home className="h-6 w-6 text-primary-foreground" />
-                </div>
-                <p className="font-heading font-bold text-foreground">Dwelly Homes</p>
-                <p className="text-xs text-muted-foreground font-body">Rent Payment Receipt</p>
-              </div>
-
-              <div className="space-y-2">
-                {[
-                  { label: "Transaction ID", value: selectedTxn.id },
-                  { label: "Date", value: selectedTxn.date },
-                  { label: "Property", value: selectedTxn.property },
-                  { label: "Amount", value: selectedTxn.amount },
-                  { label: "Payment Method", value: selectedTxn.method },
-                  { label: "M-Pesa Code", value: selectedTxn.mpesaCode },
-                  { label: "Status", value: "Completed" },
-                ].map((row) => (
-                  <div key={row.label} className="flex justify-between items-center py-1.5">
-                    <span className="text-sm text-muted-foreground font-body">{row.label}</span>
-                    <span className="text-sm font-medium font-body text-foreground">{row.value}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-t border-border border-dashed pt-3 text-center">
-                <p className="text-xs text-muted-foreground font-body">Thank you for your payment</p>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" className="font-body gap-1">
-              <Download className="h-4 w-4" /> Download PDF
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {agent.phone && (
+              <Button size="sm" variant="outline" asChild>
+                <a href={`tel:${agent.phone}`}><Phone className="h-3.5 w-3.5 mr-1.5" />Call</a>
+              </Button>
+            )}
+            {agent.email && (
+              <Button size="sm" variant="outline" asChild>
+                <a href={`mailto:${agent.email}`}><Mail className="h-3.5 w-3.5 mr-1.5" />Email</a>
+              </Button>
+            )}
+            <Button size="sm" className="bg-secondary hover:bg-secondary/90" asChild>
+              <Link to="/tenant/messages"><MessageSquare className="h-3.5 w-3.5 mr-1.5" />Message</Link>
             </Button>
-            <Button className="font-body" onClick={() => setReceiptModalOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Payment history placeholder */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-heading">Payment History</CardTitle>
+        </CardHeader>
+        <CardContent className="p-8 flex flex-col items-center text-center gap-3">
+          <CreditCard className="h-10 w-10 text-muted-foreground opacity-30" />
+          <div>
+            <p className="font-medium text-sm">M-Pesa payment integration coming soon</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Your rent payment records will appear here once M-Pesa direct payment is enabled.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

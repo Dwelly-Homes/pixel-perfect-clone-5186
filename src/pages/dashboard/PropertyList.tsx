@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Plus, Search, MoreHorizontal, Pencil, Trash2, Eye, ArrowUpDown, ChevronLeft, ChevronRight, Globe, EyeOff,
+  Plus, Search, MoreHorizontal, Pencil, Trash2, Eye, ArrowUpDown, ChevronLeft, ChevronRight, Globe, EyeOff, UserPlus,
 } from "lucide-react";
+import { OnboardTenantModal } from "@/components/dashboard/OnboardTenantModal";
+import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +41,7 @@ export default function PropertyList() {
   const [sortField, setSortField] = useState<"monthlyRent" | "createdAt">("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
+  const [onboardProp, setOnboardProp] = useState<{ _id: string; title: string; monthlyRent: number } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["myProperties", search, statusFilter, sortField, sortDir, page],
@@ -99,6 +102,7 @@ export default function PropertyList() {
   };
 
   return (
+    <>
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -255,6 +259,22 @@ export default function PropertyList() {
                               <EyeOff className="h-4 w-4 mr-2" /> Unpublish
                             </DropdownMenuItem>
                           )}
+                          {(rawProp.status === "available" || rawProp.status === "draft") && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => setOnboardProp({
+                                  _id: rawProp._id,
+                                  title: rawProp.title,
+                                  monthlyRent: rawProp.monthlyRent,
+                                })}
+                              >
+                                <UserPlus className="h-4 w-4 mr-2 text-secondary" />
+                                <span className="text-secondary font-medium">Onboard Tenant</span>
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-destructive"
                             onClick={() => handleDelete(rawProp)}
@@ -286,5 +306,14 @@ export default function PropertyList() {
         )}
       </div>
     </div>
+
+    {onboardProp && (
+      <OnboardTenantModal
+        open={!!onboardProp}
+        onClose={() => setOnboardProp(null)}
+        property={onboardProp}
+      />
+    )}
+    </>
   );
 }
