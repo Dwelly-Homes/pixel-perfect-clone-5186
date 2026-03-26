@@ -1,88 +1,132 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Home, Search, Heart, FileText, MapPin, Calendar, CheckCircle2,
-  Clock, Eye, Settings, ChevronRight, Star, MessageSquare, Bed,
-  Bath, Phone, Mail, CreditCard, AlertTriangle, Building2, User,
+  Home, Search, Heart, FileText, MapPin, Calendar,
+  MessageSquare, ChevronRight, CreditCard, Settings, Bell,
+  MessagesSquare, Clock,
 } from "lucide-react";
+import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { formatDistanceToNow } from "date-fns";
 
-const savedProperties = [
-  { id: 1, title: "Modern 2BR Apartment", location: "Kilimani, Nairobi", price: "KES 65,000/mo", beds: 2, baths: 2, image: "/placeholder.svg" },
-  { id: 2, title: "Spacious Studio", location: "Westlands, Nairobi", price: "KES 35,000/mo", beds: 1, baths: 1, image: "/placeholder.svg" },
-  { id: 3, title: "3BR Garden Villa", location: "Karen, Nairobi", price: "KES 120,000/mo", beds: 3, baths: 3, image: "/placeholder.svg" },
-];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const recentActivity = [
-  { icon: Eye, text: "Viewed 2BR in Kilimani", time: "2 hours ago", color: "text-blue-500" },
-  { icon: MessageSquare, text: "Inquiry sent to Westlands Studio", time: "1 day ago", color: "text-secondary" },
-  { icon: Calendar, text: "Viewing scheduled for Karen Villa", time: "2 days ago", color: "text-green-600" },
-  { icon: Heart, text: "Saved 3BR in Lavington", time: "3 days ago", color: "text-destructive" },
-];
+function firstName(fullName?: string) {
+  return fullName?.split(" ")[0] ?? "there";
+}
 
-const onboardingChecklist = [
-  { label: "Profile completed", done: true },
-  { label: "Preferences set", done: true },
-  { label: "ID uploaded", done: true },
-  { label: "Payslip uploaded", done: true },
-  { label: "Email verified", done: false },
-  { label: "Phone verified", done: false },
-];
+function initials(fullName?: string) {
+  if (!fullName) return "?";
+  return fullName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+}
 
-const CURRENT_TENANCY = {
-  property: "2BR Apartment, Kilimani",
-  address: "Eden Square, Chiromo Rd, Kilimani, Nairobi",
-  monthlyRent: 65000,
-  leaseStart: "2024-01-01",
-  leaseEnd: "2024-12-31",
-  agent: "James Mwangi",
-  agentPhone: "+254 712 345 678",
-  agentEmail: "j.mwangi@prestige.co.ke",
-  agency: "Prestige Properties Ltd",
-  nextPaymentDate: "2024-07-01",
-  nextPaymentAmount: 65000,
-  daysUntilPayment: 10,
+function timeAgo(dateStr: string) {
+  return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+}
+
+const notifIcon: Record<string, React.ElementType> = {
+  inquiry: MessageSquare,
+  verification: FileText,
+  property: Home,
+  payment: CreditCard,
+  earb: FileText,
+  system: Bell,
+};
+const notifColor: Record<string, string> = {
+  inquiry: "text-secondary",
+  verification: "text-green-600",
+  property: "text-blue-500",
+  payment: "text-purple-500",
+  earb: "text-amber-600",
+  system: "text-muted-foreground",
 };
 
-const UPCOMING_VIEWING = {
-  property: "Modern 2BR Apartment",
-  location: "Kilimani, Nairobi",
-  date: "2026-03-28",
-  time: "Morning (8am–12pm)",
-  agent: "James Mwangi",
-  status: "confirmed",
-};
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TenantDashboard() {
-  const completedSteps = onboardingChecklist.filter((s) => s.done).length;
-  const totalSteps = onboardingChecklist.length;
-  const completionPercent = (completedSteps / totalSteps) * 100;
+  const { user } = useAuth();
 
-  const leaseProgressDays = Math.ceil(
-    (new Date(CURRENT_TENANCY.leaseEnd).getTime() - new Date(CURRENT_TENANCY.leaseStart).getTime()) / 86400000
-  );
-  const daysElapsed = Math.ceil(
-    (Date.now() - new Date(CURRENT_TENANCY.leaseStart).getTime()) / 86400000
-  );
-  const leaseProgressPct = Math.min(100, Math.round((daysElapsed / leaseProgressDays) * 100));
+  // Conversations → unread messages count
+  const { data: chatsData, isLoading: chatsLoading } = useQuery({
+    queryKey: ["chatConversations"],
+    queryFn: async () => {
+      const { data } = await api.get("/chat");
+      return data?.data as Array<{ _id: string; unread: number; lastMessage: string | null; lastMessageAt: string | null; participants: Array<{ _id: string; fullName: string }> }>;
+    },
+    staleTime: 30000,
+  });
+
+  // Notifications → unread count + recent activity
+  const { data: notifData, isLoading: notifLoading } = useQuery({
+    queryKey: ["tenantNotifications"],
+    queryFn: async () => {
+      const { data } = await api.get("/notifications?limit=6");
+      return data as {
+        data: { notifications: Array<{ _id: string; type: string; title: string; body: string; isRead: boolean; createdAt: string; link: string | null }>; unreadCount: number };
+      };
+    },
+    staleTime: 30000,
+  });
+
+  const conversations = chatsData ?? [];
+  const unreadMessages = conversations.reduce((s, c) => s + c.unread, 0);
+  const unreadNotifs = notifData?.data?.unreadCount ?? 0;
+  const recentActivity = notifData?.data?.notifications ?? [];
+  const recentConvs = conversations.slice(0, 3);
+
+  const myId = user?.id ?? "";
 
   return (
     <div className="space-y-6">
       {/* Welcome */}
-      <div>
-        <h1 className="font-heading text-2xl font-bold text-foreground">Welcome back, James 👋</h1>
-        <p className="text-muted-foreground font-body mt-1">Here's what's happening with your property search and tenancy.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-heading text-2xl font-bold text-foreground">
+            Welcome back, {firstName(user?.fullName)} 👋
+          </h1>
+          <p className="text-muted-foreground font-body mt-1">
+            Here's a summary of your activity on Dwelly Homes.
+          </p>
+        </div>
+        <Button asChild className="bg-secondary hover:bg-secondary/90 shrink-0">
+          <Link to="/"><Search className="h-4 w-4 mr-2" />Browse Properties</Link>
+        </Button>
       </div>
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Saved Properties", value: "12", icon: Heart, iconColor: "text-destructive", href: "/tenant/saved" },
-          { label: "Viewings Scheduled", value: "3", icon: Calendar, iconColor: "text-green-600", href: "/tenant/bookings" },
-          { label: "Inquiries Sent", value: "8", icon: MessageSquare, iconColor: "text-secondary", href: "/tenant/bookings" },
-          { label: "Unread Messages", value: "2", icon: MessageSquare, iconColor: "text-blue-500", href: "/tenant/messages" },
+          {
+            label: "Unread Messages",
+            value: chatsLoading ? null : unreadMessages,
+            icon: MessagesSquare,
+            iconColor: "text-secondary",
+            href: "/tenant/messages",
+          },
+          {
+            label: "Notifications",
+            value: notifLoading ? null : unreadNotifs,
+            icon: Bell,
+            iconColor: "text-blue-500",
+            href: "/tenant/notifications",
+          },
+          {
+            label: "Conversations",
+            value: chatsLoading ? null : conversations.length,
+            icon: MessageSquare,
+            iconColor: "text-green-600",
+            href: "/tenant/messages",
+          },
+          {
+            label: "Saved Properties",
+            value: 0,
+            icon: Heart,
+            iconColor: "text-destructive",
+            href: "/tenant/saved",
+          },
         ].map((stat) => (
           <Link key={stat.label} to={stat.href}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer">
@@ -91,7 +135,11 @@ export default function TenantDashboard() {
                   <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold font-heading text-foreground">{stat.value}</p>
+                  {stat.value === null ? (
+                    <Skeleton className="h-7 w-8 mb-0.5" />
+                  ) : (
+                    <p className="text-2xl font-bold font-heading text-foreground">{stat.value}</p>
+                  )}
                   <p className="text-xs text-muted-foreground font-body">{stat.label}</p>
                 </div>
               </CardContent>
@@ -100,232 +148,213 @@ export default function TenantDashboard() {
         ))}
       </div>
 
-      {/* Onboarding Progress */}
-      {completionPercent < 100 && (
-        <Card className="border-secondary/30 bg-secondary/5">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-heading font-semibold text-foreground">Complete Your Profile</h3>
-                <p className="text-xs text-muted-foreground font-body">{completedSteps} of {totalSteps} steps done</p>
-              </div>
-              <span className="text-lg font-bold font-heading text-secondary">{Math.round(completionPercent)}%</span>
-            </div>
-            <Progress value={completionPercent} className="h-2 mb-4 [&>div]:bg-secondary" />
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {onboardingChecklist.map((item) => (
-                <div key={item.label} className="flex items-center gap-2 text-sm font-body">
-                  {item.done
-                    ? <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                    : <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
-                  }
-                  <span className={item.done ? "text-muted-foreground line-through" : "text-foreground"}>
-                    {item.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <Button asChild size="sm" className="mt-4 bg-secondary hover:bg-secondary/90">
-              <Link to="/tenant/onboarding">Continue Setup</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Current Tenancy */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-heading flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground" />Current Tenancy
-            </CardTitle>
-            <Badge className="bg-green-100 text-green-700 border-0">Active Lease</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2.5">
-              <div>
-                <p className="text-xs text-muted-foreground font-body">Property</p>
-                <p className="font-semibold font-heading">{CURRENT_TENANCY.property}</p>
-                <p className="text-xs text-muted-foreground font-body flex items-center gap-1 mt-0.5">
-                  <MapPin className="h-3 w-3" />{CURRENT_TENANCY.address}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground font-body">Lease Start</p>
-                  <p className="font-medium">{new Date(CURRENT_TENANCY.leaseStart).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-body">Lease End</p>
-                  <p className="font-medium">{new Date(CURRENT_TENANCY.leaseEnd).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</p>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-muted-foreground">Lease progress</span>
-                  <span className="font-medium">{leaseProgressPct}% complete</span>
-                </div>
-                <Progress value={leaseProgressPct} className="h-1.5" />
-              </div>
-            </div>
-            <div className="space-y-2.5">
-              <div>
-                <p className="text-xs text-muted-foreground font-body">Monthly Rent</p>
-                <p className="text-2xl font-heading font-bold text-secondary">KES {CURRENT_TENANCY.monthlyRent.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-body mb-1.5">Agent / Property Manager</p>
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold shrink-0">JM</div>
-                  <div>
-                    <p className="text-sm font-medium font-body">{CURRENT_TENANCY.agent}</p>
-                    <p className="text-[10px] text-muted-foreground">{CURRENT_TENANCY.agency}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="gap-1 text-xs" asChild>
-                  <a href={`tel:${CURRENT_TENANCY.agentPhone}`}><Phone className="h-3.5 w-3.5" />Call</a>
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1 text-xs" asChild>
-                  <a href={`mailto:${CURRENT_TENANCY.agentEmail}`}><Mail className="h-3.5 w-3.5" />Email</a>
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1 text-xs" asChild>
-                  <Link to="/tenant/messages"><MessageSquare className="h-3.5 w-3.5" />Message</Link>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Upcoming Payment + Viewing */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Next Payment */}
-        <Card className={CURRENT_TENANCY.daysUntilPayment <= 7 ? "border-amber-300 bg-amber-50/50" : "border-secondary/20 bg-secondary/5"}>
-          <CardContent className="p-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${CURRENT_TENANCY.daysUntilPayment <= 7 ? "bg-amber-100" : "bg-secondary/20"}`}>
-                {CURRENT_TENANCY.daysUntilPayment <= 7
-                  ? <AlertTriangle className="h-5 w-5 text-amber-600" />
-                  : <CreditCard className="h-5 w-5 text-secondary" />
-                }
-              </div>
-              <div>
-                <p className="font-body font-semibold text-sm text-foreground">Next Rent Payment</p>
-                <p className="text-xs text-muted-foreground font-body">
-                  Due {new Date(CURRENT_TENANCY.nextPaymentDate).toLocaleDateString("en-KE", { day: "numeric", month: "short" })} · {CURRENT_TENANCY.daysUntilPayment} days left
-                </p>
-              </div>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="font-heading font-bold text-secondary">KES {CURRENT_TENANCY.nextPaymentAmount.toLocaleString()}</p>
-              <Button size="sm" className="mt-1 bg-green-600 hover:bg-green-700 text-white text-xs" asChild>
-                <Link to="/tenant/payments">Pay Now</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Next Viewing */}
-        <Card className="border-green-200 bg-green-50/50">
-          <CardContent className="p-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                <Calendar className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="font-body font-semibold text-sm text-foreground">Upcoming Viewing</p>
-                <p className="text-xs text-muted-foreground font-body">{UPCOMING_VIEWING.property}</p>
-                <p className="text-xs text-muted-foreground font-body flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {new Date(UPCOMING_VIEWING.date).toLocaleDateString("en-KE", { weekday: "short", month: "short", day: "numeric" })} · {UPCOMING_VIEWING.time}
-                </p>
-              </div>
-            </div>
-            <Button size="sm" variant="outline" className="text-xs shrink-0" asChild>
-              <Link to="/tenant/bookings">View All</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Saved Properties */}
+
+        {/* ─── Recent Conversations ─────────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
+            <h2 className="font-heading text-lg font-semibold text-foreground">Recent Messages</h2>
+            <Button variant="ghost" size="sm" className="font-body text-secondary" asChild>
+              <Link to="/tenant/messages">View All <ChevronRight className="h-4 w-4 ml-1" /></Link>
+            </Button>
+          </div>
+
+          {chatsLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i}>
+                  <CardContent className="p-4 flex items-center gap-3 animate-pulse">
+                    <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-3 w-1/3" />
+                      <Skeleton className="h-3 w-2/3" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : recentConvs.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 flex flex-col items-center text-center gap-3">
+                <MessagesSquare className="h-10 w-10 text-muted-foreground opacity-30" />
+                <div>
+                  <p className="font-medium text-sm">No conversations yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Browse properties and click "Chat with Agent" to start a conversation.
+                  </p>
+                </div>
+                <Button size="sm" asChild className="bg-secondary hover:bg-secondary/90">
+                  <Link to="/">Browse Properties</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {recentConvs.map((conv) => {
+                const other = conv.participants.find((p) => p._id !== myId);
+                return (
+                  <Link key={conv._id} to={`/tenant/messages?conv=${conv._id}`}>
+                    <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                      <CardContent className="p-4 flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">
+                          {initials(other?.fullName)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-semibold truncate">{other?.fullName ?? "Unknown"}</p>
+                            {conv.lastMessageAt && (
+                              <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                {timeAgo(conv.lastMessageAt)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {conv.lastMessage ?? "No messages yet"}
+                          </p>
+                        </div>
+                        {conv.unread > 0 && (
+                          <span className="h-5 w-5 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {conv.unread}
+                          </span>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
+              {conversations.length > 3 && (
+                <Button variant="outline" size="sm" className="w-full text-xs" asChild>
+                  <Link to="/tenant/messages">View all {conversations.length} conversations</Link>
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Saved Properties placeholder */}
+          <div className="flex items-center justify-between mt-2">
             <h2 className="font-heading text-lg font-semibold text-foreground">Saved Properties</h2>
             <Button variant="ghost" size="sm" className="font-body text-secondary" asChild>
               <Link to="/tenant/saved">View All <ChevronRight className="h-4 w-4 ml-1" /></Link>
             </Button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {savedProperties.map((property) => (
-              <Card key={property.id} className="overflow-hidden hover:shadow-md transition-shadow">
-                <div className="h-32 bg-muted relative">
-                  <img src={property.image} alt={property.title} className="h-full w-full object-cover" />
-                  <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-7 w-7 bg-card/80 hover:bg-card">
-                    <Heart className="h-3.5 w-3.5 text-destructive fill-destructive" />
-                  </Button>
-                </div>
-                <CardContent className="p-3">
-                  <p className="font-body font-semibold text-sm text-foreground truncate">{property.title}</p>
-                  <p className="text-xs text-muted-foreground font-body flex items-center gap-1 mt-0.5">
-                    <MapPin className="h-3 w-3" /> {property.location}
-                  </p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-sm font-bold text-secondary font-body">{property.price}</span>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-body">
-                      <span className="flex items-center gap-0.5"><Bed className="h-3 w-3" /> {property.beds}</span>
-                      <span className="flex items-center gap-0.5"><Bath className="h-3 w-3" /> {property.baths}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <Card>
+            <CardContent className="p-8 flex flex-col items-center text-center gap-3">
+              <Heart className="h-10 w-10 text-muted-foreground opacity-30" />
+              <div>
+                <p className="font-medium text-sm">No saved properties yet</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Tap the ♡ on any listing to save it here for later.
+                </p>
+              </div>
+              <Button size="sm" asChild className="bg-secondary hover:bg-secondary/90">
+                <Link to="/"><Search className="h-4 w-4 mr-2" />Browse Properties</Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Activity + Quick Actions */}
+        {/* ─── Activity + Quick Actions ─────────────────────────────────────── */}
         <div className="space-y-4">
-          <h2 className="font-heading text-lg font-semibold text-foreground">Recent Activity</h2>
+          {/* Recent Activity from notifications */}
+          <div className="flex items-center justify-between">
+            <h2 className="font-heading text-lg font-semibold text-foreground">Recent Activity</h2>
+            <Button variant="ghost" size="sm" className="text-secondary" asChild>
+              <Link to="/tenant/notifications">View All <ChevronRight className="h-4 w-4 ml-1" /></Link>
+            </Button>
+          </div>
           <Card>
-            <CardContent className="p-0 divide-y divide-border">
-              {recentActivity.map((item, i) => (
-                <div key={i} className="flex items-start gap-3 p-3">
-                  <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
-                    <item.icon className={`h-4 w-4 ${item.color}`} />
+            {notifLoading ? (
+              <CardContent className="p-4 space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 animate-pulse">
+                    <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-body text-foreground">{item.text}</p>
-                    <p className="text-xs text-muted-foreground font-body">{item.time}</p>
-                  </div>
+                ))}
+              </CardContent>
+            ) : recentActivity.length === 0 ? (
+              <CardContent className="p-6 flex flex-col items-center text-center gap-2">
+                <Clock className="h-8 w-8 text-muted-foreground opacity-30" />
+                <p className="text-sm text-muted-foreground">No activity yet</p>
+              </CardContent>
+            ) : (
+              <CardContent className="p-0 divide-y divide-border">
+                {recentActivity.map((item) => {
+                  const Icon = notifIcon[item.type] ?? Bell;
+                  const color = notifColor[item.type] ?? "text-muted-foreground";
+                  return (
+                    <Link
+                      key={item._id}
+                      to={item.link ?? "/tenant/notifications"}
+                      className="flex items-start gap-3 p-3 hover:bg-muted/40 transition-colors"
+                    >
+                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                        <Icon className={`h-4 w-4 ${color}`} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-body truncate ${!item.isRead ? "font-semibold" : ""}`}>
+                          {item.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">{item.body}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(item.createdAt)}</p>
+                      </div>
+                      {!item.isRead && (
+                        <span className="h-2 w-2 rounded-full bg-secondary mt-2 shrink-0" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </CardContent>
+            )}
+          </Card>
+
+          {/* Profile Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-heading">My Profile</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center text-sm font-bold shrink-0">
+                  {initials(user?.fullName)}
                 </div>
-              ))}
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm truncate">{user?.fullName ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.email ?? "—"}</p>
+                  {user?.phone && (
+                    <p className="text-xs text-muted-foreground">{user.phone}</p>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
 
+          {/* Quick Actions */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-heading">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <Button variant="outline" className="w-full justify-start font-body" asChild>
-                <Link to="/"><Search className="h-4 w-4 mr-2" /> Browse Properties</Link>
+                <Link to="/"><Search className="h-4 w-4 mr-2" />Browse Properties</Link>
               </Button>
               <Button variant="outline" className="w-full justify-start font-body" asChild>
-                <Link to="/tenant/payments"><CreditCard className="h-4 w-4 mr-2" /> Pay Rent</Link>
+                <Link to="/tenant/messages"><MessageSquare className="h-4 w-4 mr-2" />My Messages</Link>
               </Button>
               <Button variant="outline" className="w-full justify-start font-body" asChild>
-                <Link to="/tenant/messages"><MessageSquare className="h-4 w-4 mr-2" /> Message Agent</Link>
+                <Link to="/tenant/bookings"><Calendar className="h-4 w-4 mr-2" />My Viewings</Link>
               </Button>
               <Button variant="outline" className="w-full justify-start font-body" asChild>
-                <Link to="/tenant/profile"><Settings className="h-4 w-4 mr-2" /> Account Settings</Link>
+                <Link to="/tenant/saved"><Heart className="h-4 w-4 mr-2" />Saved Properties</Link>
               </Button>
               <Button variant="outline" className="w-full justify-start font-body" asChild>
-                <Link to="/tenant/onboarding"><FileText className="h-4 w-4 mr-2" /> Update Documents</Link>
+                <Link to="/tenant/notifications"><Bell className="h-4 w-4 mr-2" />Notifications</Link>
+              </Button>
+              <Button variant="outline" className="w-full justify-start font-body" asChild>
+                <Link to="/tenant/profile"><Settings className="h-4 w-4 mr-2" />Account Settings</Link>
               </Button>
             </CardContent>
           </Card>

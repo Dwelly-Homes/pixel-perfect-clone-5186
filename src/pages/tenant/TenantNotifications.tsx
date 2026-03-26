@@ -1,91 +1,159 @@
 import { useState } from "react";
-import { Bell, Home, CreditCard, Calendar, MessageSquare, AlertTriangle, CheckCheck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Bell, Home, CreditCard, MessageSquare, FileText,
+  ShieldCheck, CheckCheck, Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
+import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Link } from "react-router-dom";
 
-type NType = "payment" | "viewing" | "message" | "property" | "warning" | "system";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Notification {
-  id: string;
-  type: NType;
+interface Notif {
+  _id: string;
+  type: string;
   title: string;
   body: string;
-  time: string;
-  read: boolean;
-  link: string;
+  isRead: boolean;
+  createdAt: string;
+  link: string | null;
 }
 
-const MOCK: Notification[] = [
-  { id: "1", type: "payment", title: "Rent due in 10 days", body: "Your rent of KES 65,000 for 2BR Apartment, Kilimani is due on 1 July 2024. Pay early to avoid late fees.", time: "2024-06-21T08:00:00", read: false, link: "/tenant/payments" },
-  { id: "2", type: "viewing", title: "Viewing confirmed", body: "Your viewing of Modern 2BR Apartment in Kilimani is confirmed for 28 Mar at 9am. Agent: James Mwangi.", time: "2024-06-20T14:30:00", read: false, link: "/tenant/bookings" },
-  { id: "3", type: "message", title: "Reply from James Mwangi", body: "James replied to your inquiry: \"Yes, the property is still available! I can arrange a viewing this weekend.\"", time: "2024-06-19T10:15:00", read: false, link: "/tenant/messages" },
-  { id: "4", type: "property", title: "Price drop on saved property", body: "Spacious Studio in Westlands dropped from KES 40,000 to KES 35,000/mo. Check it out!", time: "2024-06-18T09:00:00", read: true, link: "/tenant/saved" },
-  { id: "5", type: "warning", title: "Saved property no longer available", body: "3BR Garden Villa in Karen has been rented out and is no longer available.", time: "2024-06-17T11:30:00", read: true, link: "/tenant/saved" },
-  { id: "6", type: "payment", title: "Payment received", body: "Your rent payment of KES 65,000 for June 2024 was successfully processed. M-Pesa code: SHL4K7X9QR.", time: "2024-06-01T09:00:00", read: true, link: "/tenant/payments" },
-  { id: "7", type: "system", title: "Welcome to Dwelly Homes!", body: "Your tenant account is active. Complete your profile to get matched with properties faster.", time: "2024-05-28T12:00:00", read: true, link: "/tenant/onboarding" },
-];
+// ─── Config ───────────────────────────────────────────────────────────────────
 
-const typeConfig: Record<NType, { icon: React.ElementType; color: string; bg: string }> = {
-  payment: { icon: CreditCard, color: "text-green-600", bg: "bg-green-50" },
-  viewing: { icon: Calendar, color: "text-blue-600", bg: "bg-blue-50" },
-  message: { icon: MessageSquare, color: "text-purple-600", bg: "bg-purple-50" },
-  property: { icon: Home, color: "text-secondary", bg: "bg-secondary/10" },
-  warning: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50" },
-  system: { icon: Bell, color: "text-gray-500", bg: "bg-gray-100" },
+const typeConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
+  inquiry:      { icon: MessageSquare, color: "text-secondary",          bg: "bg-secondary/10" },
+  verification: { icon: ShieldCheck,   color: "text-green-600",          bg: "bg-green-50" },
+  property:     { icon: Home,          color: "text-blue-600",           bg: "bg-blue-50" },
+  payment:      { icon: CreditCard,    color: "text-purple-600",         bg: "bg-purple-50" },
+  earb:         { icon: FileText,      color: "text-amber-600",          bg: "bg-amber-50" },
+  system:       { icon: Bell,          color: "text-muted-foreground",   bg: "bg-muted" },
 };
 
-const TABS = ["All", "Unread", "Payments", "Viewings", "Messages"] as const;
+const TABS = ["All", "Unread", "Inquiries", "Property", "Payments", "System"] as const;
+type Tab = typeof TABS[number];
 
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const hours = Math.floor(diff / 3600000);
-  if (hours < 1) return "Just now";
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString("en-KE", { day: "numeric", month: "short" });
+const tabTypeMap: Record<Tab, string | null> = {
+  All:       null,
+  Unread:    null,
+  Inquiries: "inquiry",
+  Property:  "property",
+  Payments:  "payment",
+  System:    "system",
+};
+
+function resolveRoute(link: string | null, type: string): string {
+  if (link) {
+    if (link.startsWith("/dashboard") || link.startsWith("/admin")) return "/tenant";
+    return link;
+  }
+  const fallbacks: Record<string, string> = {
+    inquiry:      "/tenant/bookings",
+    property:     "/",
+    payment:      "/tenant/payments",
+    verification: "/tenant/profile",
+    earb:         "/tenant/profile",
+    system:       "/tenant/notifications",
+  };
+  return fallbacks[type] ?? "/tenant";
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TenantNotifications() {
   const { toast } = useToast();
-  const [tab, setTab] = useState<typeof TABS[number]>("All");
-  const [notifications, setNotifications] = useState(MOCK);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<Tab>("All");
+  const [page, setPage] = useState(1);
 
-  const unread = notifications.filter((n) => !n.read).length;
+  const typeFilter = tabTypeMap[tab];
 
-  function markAllRead() {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    toast({ title: "All notifications marked as read" });
-  }
-
-  function markRead(id: string) {
-    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
-  }
-
-  const filtered = notifications.filter((n) => {
-    if (tab === "Unread") return !n.read;
-    if (tab === "Payments") return n.type === "payment";
-    if (tab === "Viewings") return n.type === "viewing";
-    if (tab === "Messages") return n.type === "message";
-    return true;
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["tenantNotifPage", tab, page],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: "20", page: String(page) });
+      if (typeFilter) params.set("type", typeFilter);
+      const { data } = await api.get(`/notifications?${params}`);
+      return data as {
+        data: { notifications: Notif[]; unreadCount: number };
+        meta: { total: number; totalPages: number; page: number };
+      };
+    },
+    staleTime: 15000,
   });
+
+  const notifications = data?.data?.notifications ?? [];
+  const unreadCount   = data?.data?.unreadCount   ?? 0;
+  const totalPages    = data?.meta?.totalPages     ?? 1;
+
+  // client-side filter for "Unread" tab (same query, just filter)
+  const displayed = tab === "Unread" ? notifications.filter((n) => !n.isRead) : notifications;
+
+  // ── Mark single read ──
+  const markRead = useMutation({
+    mutationFn: (id: string) => api.patch(`/notifications/${id}/read`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenantNotifPage"] });
+      queryClient.invalidateQueries({ queryKey: ["tenantNotifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationBell"] });
+    },
+  });
+
+  // ── Mark all read ──
+  const markAll = useMutation({
+    mutationFn: () => api.patch("/notifications/read-all"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenantNotifPage"] });
+      queryClient.invalidateQueries({ queryKey: ["tenantNotifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationBell"] });
+      toast({ title: "All notifications marked as read" });
+    },
+  });
+
+  function handleClick(n: Notif) {
+    if (!n.isRead) markRead.mutate(n._id);
+    navigate(resolveRoute(n.link, n.type));
+  }
+
+  function handleTabChange(t: Tab) {
+    setTab(t);
+    setPage(1);
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="font-heading text-2xl font-bold">Notifications</h1>
-            {unread > 0 && <Badge className="bg-destructive text-destructive-foreground">{unread} new</Badge>}
+            {unreadCount > 0 && (
+              <Badge className="bg-destructive text-destructive-foreground">{unreadCount} new</Badge>
+            )}
           </div>
-          <p className="text-sm text-muted-foreground mt-1">Stay updated on your tenancy and property search.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Stay updated on your tenancy and property search.
+          </p>
         </div>
-        {unread > 0 && (
-          <Button variant="ghost" size="sm" className="text-xs shrink-0" onClick={markAllRead}>
-            <CheckCheck className="h-3.5 w-3.5 mr-1.5" />Mark all read
+        {unreadCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs shrink-0"
+            onClick={() => markAll.mutate()}
+            disabled={markAll.isPending}
+          >
+            {markAll.isPending
+              ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              : <CheckCheck className="h-3.5 w-3.5 mr-1.5" />}
+            Mark all read
           </Button>
         )}
       </div>
@@ -93,10 +161,16 @@ export default function TenantNotifications() {
       {/* Tabs */}
       <div className="flex gap-1.5 flex-wrap">
         {TABS.map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-              tab === t ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground"
-            )}>
+          <button
+            key={t}
+            onClick={() => handleTabChange(t)}
+            className={cn(
+              "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+              tab === t
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted hover:bg-muted/80 text-muted-foreground"
+            )}
+          >
             {t}
           </button>
         ))}
@@ -104,7 +178,18 @@ export default function TenantNotifications() {
 
       {/* List */}
       <div className="space-y-2">
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex gap-4 p-4 rounded-xl border">
+              <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-3 w-1/3" />
+                <Skeleton className="h-3 w-2/3" />
+                <Skeleton className="h-3 w-1/4" />
+              </div>
+            </div>
+          ))
+        ) : displayed.length === 0 ? (
           <div className="py-20 text-center space-y-3">
             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto">
               <Bell className="h-6 w-6 text-muted-foreground" />
@@ -112,33 +197,62 @@ export default function TenantNotifications() {
             <p className="font-medium">You're all caught up!</p>
             <p className="text-sm text-muted-foreground">No notifications in this category.</p>
           </div>
-        ) : filtered.map((n) => {
-          const tc = typeConfig[n.type];
-          const Icon = tc.icon;
-          return (
-            <Link
-              key={n.id}
-              to={n.link}
-              onClick={() => markRead(n.id)}
-              className={cn(
-                "flex gap-4 p-4 rounded-xl border transition-colors hover:bg-muted/30 cursor-pointer",
-                !n.read && "bg-background border-l-4 border-l-primary"
-              )}
-            >
-              <div className={cn("h-10 w-10 rounded-full flex items-center justify-center shrink-0", tc.bg)}>
-                <Icon className={cn("h-5 w-5", tc.color)} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <p className={cn("text-sm", !n.read && "font-semibold")}>{n.title}</p>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo(n.time)}</span>
+        ) : (
+          displayed.map((n) => {
+            const tc = typeConfig[n.type] ?? typeConfig.system;
+            const Icon = tc.icon;
+            return (
+              <button
+                key={n._id}
+                onClick={() => handleClick(n)}
+                className={cn(
+                  "w-full text-left flex gap-4 p-4 rounded-xl border transition-colors hover:bg-muted/30 cursor-pointer",
+                  !n.isRead && "bg-background border-l-4 border-l-primary"
+                )}
+              >
+                <div className={cn("h-10 w-10 rounded-full flex items-center justify-center shrink-0", tc.bg)}>
+                  <Icon className={cn("h-5 w-5", tc.color)} />
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
-              </div>
-            </Link>
-          );
-        })}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className={cn("text-sm", !n.isRead && "font-semibold")}>{n.title}</p>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                      {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
+                </div>
+                {!n.isRead && (
+                  <span className="h-2 w-2 rounded-full bg-secondary mt-2 shrink-0" />
+                )}
+              </button>
+            );
+          })
+        )}
       </div>
+
+      {/* Pagination */}
+      {!isLoading && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1 || isFetching}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            Previous
+          </Button>
+          <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages || isFetching}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Next"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

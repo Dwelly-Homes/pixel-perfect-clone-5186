@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { api, getApiError } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface InquiryModalProps {
   open: boolean;
@@ -16,6 +17,8 @@ interface InquiryModalProps {
 }
 
 export function InquiryModal({ open, onClose, propertyId, propertyTitle, agentName }: InquiryModalProps) {
+  const { user, isAuthenticated } = useAuth();
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -24,15 +27,21 @@ export function InquiryModal({ open, onClose, propertyId, propertyTitle, agentNa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone) return;
+
+    const senderName = isAuthenticated ? user!.fullName : name;
+    const senderPhone = isAuthenticated ? user!.phone : `+254${phone.replace(/^0/, "")}`;
+    const senderEmail = isAuthenticated ? user!.email : (email || undefined);
+
+    if (!isAuthenticated && (!name || !phone)) return;
+
     setSubmitting(true);
     try {
       await api.post("/inquiries", {
         propertyId,
         inquiryType: "general",
-        senderName: name,
-        senderPhone: `+254${phone.replace(/^0/, "")}`,
-        senderEmail: email || undefined,
+        senderName,
+        senderPhone,
+        senderEmail,
         message,
       });
       toast.success("Your inquiry has been sent! The agent will contact you shortly.");
@@ -53,28 +62,41 @@ export function InquiryModal({ open, onClose, propertyId, propertyTitle, agentNa
         <p className="text-sm text-muted-foreground font-body mb-2">
           Contact <strong>{agentName}</strong> about this property
         </p>
+
+        {isAuthenticated ? (
+          <div className="rounded-md bg-muted px-4 py-3 mb-2 text-sm font-body text-muted-foreground">
+            Sending as <strong className="text-foreground">{user!.fullName}</strong>
+            {user!.phone && <> &middot; {user!.phone}</>}
+            {" "}&middot; {user!.email}
+          </div>
+        ) : null}
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label className="font-body">Full Name *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1" />
-          </div>
-          <div>
-            <Label className="font-body">Phone Number *</Label>
-            <div className="flex mt-1">
-              <span className="flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">+254</span>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="7XX XXX XXX"
-                required
-                className="rounded-l-none"
-              />
-            </div>
-          </div>
-          <div>
-            <Label className="font-body">Email (optional)</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1" />
-          </div>
+          {!isAuthenticated && (
+            <>
+              <div>
+                <Label className="font-body">Full Name *</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1" />
+              </div>
+              <div>
+                <Label className="font-body">Phone Number *</Label>
+                <div className="flex mt-1">
+                  <span className="flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">+254</span>
+                  <Input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="7XX XXX XXX"
+                    required
+                    className="rounded-l-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="font-body">Email (optional)</Label>
+                <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="mt-1" />
+              </div>
+            </>
+          )}
           <div>
             <Label className="font-body">Message</Label>
             <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} className="mt-1" />
