@@ -1,12 +1,9 @@
 import { useEffect } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "./DashboardSidebar";
-import { Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { NotificationBell } from "./NotificationBell";
 import { useAuth } from "@/contexts/AuthContext";
-import { api } from "@/lib/api";
 
 export function DashboardLayout() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -18,17 +15,6 @@ export function DashboardLayout() {
     }
   }, [isAuthenticated, isLoading, navigate]);
 
-  const { data: notifData } = useQuery({
-    queryKey: ["unreadNotifications"],
-    queryFn: async () => {
-      const { data } = await api.get("/notifications?limit=1");
-      return data;
-    },
-    enabled: isAuthenticated,
-    refetchInterval: 60000,
-  });
-
-  const unreadCount = notifData?.pagination?.total || 0;
   const initials = user?.fullName
     ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
     : "U";
@@ -56,19 +42,7 @@ export function DashboardLayout() {
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative h-8 w-8"
-                onClick={() => navigate("/dashboard/notifications")}
-              >
-                <Bell className="h-4 w-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-secondary text-[10px] font-bold text-secondary-foreground flex items-center justify-center">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
-              </Button>
+              <NotificationBell />
               <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
                 {initials}
               </div>
