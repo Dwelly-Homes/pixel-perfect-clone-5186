@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,10 @@ import {
 } from "@/components/ui/select";
 import {
   Eye, Search, Calendar, Clock, CheckCircle2, XCircle,
-  AlertCircle, Send, MapPin, Phone, MessageSquare, Filter,
+  Send, MapPin, Phone, MessageSquare, Filter, Loader2,
 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, getApiError } from "@/lib/api";
+import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -69,7 +70,32 @@ function propertyLocation(p: PopulatedProperty | null) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TenantBookings() {
+  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState("all");
+  const [startingChatFor, setStartingChatFor] = useState<string | null>(null);
+
+  const startChatMutation = useMutation({
+    mutationFn: async ({ recipientId, propertyId }: { recipientId: string; propertyId?: string }) => {
+      const { data } = await api.post("/chat", { recipientId, propertyId });
+      return data?.data as { _id: string };
+    },
+    onSuccess: (conv) => {
+      navigate(`/tenant/messages?conv=${conv._id}`);
+    },
+    onError: (err) => {
+      toast.error(getApiError(err));
+      setStartingChatFor(null);
+    },
+  });
+
+  function handleMessageAgent(inquiry: Inquiry) {
+    if (!inquiry.agentId) return;
+    setStartingChatFor(inquiry._id);
+    startChatMutation.mutate({
+      recipientId: inquiry.agentId._id,
+      propertyId: inquiry.propertyId?._id,
+    });
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ["myInquiries"],
@@ -220,18 +246,33 @@ export default function TenantBookings() {
                           </span>
                         </div>
                         {agent && (
-                          <div className="flex items-center justify-between pt-1 border-t border-border">
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-border flex-wrap">
                             <p className="text-sm font-body">
                               <span className="text-muted-foreground">Agent:</span> <strong>{agent.fullName}</strong>
                             </p>
-                            {booking.status === "responded" && agent.phone && (
-                              <a
-                                href={`tel:${agent.phone}`}
-                                className="text-sm text-secondary hover:underline font-body flex items-center gap-1"
+                            <div className="flex items-center gap-2">
+                              {booking.status === "responded" && agent.phone && (
+                                <a
+                                  href={`tel:${agent.phone}`}
+                                  className="text-sm text-secondary hover:underline font-body flex items-center gap-1"
+                                >
+                                  <Phone className="h-3.5 w-3.5" /> {agent.phone}
+                                </a>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="font-body text-xs gap-1"
+                                disabled={startingChatFor === booking._id}
+                                onClick={() => handleMessageAgent(booking)}
                               >
-                                <Phone className="h-3.5 w-3.5" /> {agent.phone}
-                              </a>
-                            )}
+                                {startingChatFor === booking._id
+                                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                                  : <MessageSquare className="h-3 w-3" />
+                                }
+                                Message Agent
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -291,16 +332,24 @@ export default function TenantBookings() {
                       <p className="text-sm font-body">{inquiry.message}</p>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
                       {agent && (
                         <p className="text-xs text-muted-foreground font-body">Agent: {agent.fullName}</p>
                       )}
-                      {inquiry.status === "responded" && (
-                        <Link to={`/tenant/messages`}>
-                          <Button size="sm" variant="outline" className="font-body text-xs gap-1">
-                            <MessageSquare className="h-3 w-3" /> Message Agent
-                          </Button>
-                        </Link>
+                      {agent && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="font-body text-xs gap-1"
+                          disabled={startingChatFor === inquiry._id}
+                          onClick={() => handleMessageAgent(inquiry)}
+                        >
+                          {startingChatFor === inquiry._id
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <MessageSquare className="h-3 w-3" />
+                          }
+                          Message Agent
+                        </Button>
                       )}
                     </div>
                   </CardContent>

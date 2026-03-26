@@ -1,8 +1,18 @@
-import { Outlet, Link, useLocation } from "react-router-dom";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { Home, Search, Heart, Bell, Calendar, CreditCard, MessageSquare, User, LogOut, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 
 const navLinks = [
   { label: "Dashboard", href: "/tenant", icon: Home, exact: true },
@@ -13,12 +23,35 @@ const navLinks = [
   { label: "Messages", href: "/tenant/messages", icon: MessageSquare },
 ];
 
+function initials(name?: string | null) {
+  if (!name) return "?";
+  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
 export default function TenantLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isActive = (href: string, exact = false) =>
     exact ? location.pathname === href : location.pathname.startsWith(href);
+
+  // Fetch unread notification count
+  const { data: notifData } = useQuery({
+    queryKey: ["notifUnreadCount"],
+    queryFn: async () => {
+      const { data } = await api.get("/notifications?limit=1");
+      return (data?.data?.unreadCount ?? 0) as number;
+    },
+    refetchInterval: 60_000,
+  });
+  const unreadCount = notifData ?? 0;
+
+  function handleLogout() {
+    logout();
+    navigate("/login");
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -54,17 +87,52 @@ export default function TenantLayout() {
 
           {/* Right actions */}
           <div className="flex items-center gap-2">
+            {/* Bell */}
             <Link to="/tenant/notifications">
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
-                <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-[10px] text-destructive-foreground flex items-center justify-center font-bold">3</span>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-[10px] text-destructive-foreground flex items-center justify-center font-bold">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
               </Button>
             </Link>
-            <Link to="/tenant/profile">
-              <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-body font-bold text-sm cursor-pointer hover:ring-2 hover:ring-secondary/50 transition-all">
-                JM
-              </div>
-            </Link>
+
+            {/* Profile dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-body font-bold text-sm cursor-pointer hover:ring-2 hover:ring-secondary/50 transition-all focus:outline-none">
+                  {initials(user?.fullName)}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {user && (
+                  <>
+                    <div className="px-3 py-2">
+                      <p className="text-sm font-medium truncate">{user.fullName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                    </div>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuItem asChild>
+                  <Link to="/tenant/profile" className="flex items-center gap-2 cursor-pointer">
+                    <User className="h-4 w-4" />
+                    Profile & Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {/* Mobile menu toggle */}
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(!mobileOpen)}>
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -98,12 +166,12 @@ export default function TenantLayout() {
             >
               <User className="h-4 w-4" />Profile & Settings
             </Link>
-            <Link
-              to="/login"
-              className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            <button
+              onClick={() => { setMobileOpen(false); handleLogout(); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
             >
               <LogOut className="h-4 w-4" />Sign Out
-            </Link>
+            </button>
           </div>
         )}
       </header>

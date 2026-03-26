@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, MessageSquare, Phone, Mail, Home, Clock, CheckCircle, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, MessageSquare, Phone, Mail, Home, Clock, CheckCircle, X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,12 +49,28 @@ function timeAgo(dateStr: string) {
 }
 
 export default function Inquiries() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("All");
   const [page, setPage] = useState(1);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selected, setSelected] = useState<any | null>(null);
+  const [startingChat, setStartingChat] = useState(false);
+
+  const startChatMutation = useMutation({
+    mutationFn: async ({ recipientId, propertyId }: { recipientId: string; propertyId?: string }) => {
+      const { data } = await api.post("/chat", { recipientId, propertyId });
+      return data?.data as { _id: string };
+    },
+    onSuccess: (conv) => {
+      navigate(`/dashboard/chat?conv=${conv._id}`);
+    },
+    onError: (err) => {
+      toast.error(getApiError(err));
+      setStartingChat(false);
+    },
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["inquiries", tab, page],
@@ -242,12 +259,46 @@ export default function Inquiries() {
             </div>
 
             <div className="space-y-2 pt-2 border-t">
-              <p className="text-sm font-medium">Reply via SMS</p>
-              <Textarea placeholder="Type your reply…" rows={3} disabled className="resize-none" />
-              <Button size="sm" disabled className="opacity-60">
-                Send Reply via SMS
-                <Badge variant="outline" className="ml-2 text-[10px]">Coming Soon</Badge>
-              </Button>
+              {selected.senderId ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">Reply via Chat</p>
+                    <Badge className="bg-green-100 text-green-700 border-0 text-[10px]">Account Holder</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {selected.senderName} has a Dwelly account — you can reply directly via in-app chat.
+                  </p>
+                  <Button
+                    size="sm"
+                    className="bg-secondary hover:bg-secondary/90"
+                    disabled={startingChat}
+                    onClick={() => {
+                      setStartingChat(true);
+                      startChatMutation.mutate({
+                        recipientId: selected.senderId._id,
+                        propertyId: typeof selected.propertyId === "object" ? selected.propertyId?._id : selected.propertyId,
+                      });
+                    }}
+                  >
+                    {startingChat
+                      ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Opening Chat…</>
+                      : <><MessageSquare className="h-4 w-4 mr-1.5" />Open Chat</>
+                    }
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium">Reply via SMS</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selected.senderName} does not have a Dwelly account. SMS reply coming soon.
+                  </p>
+                  <Textarea placeholder="Type your reply…" rows={3} disabled className="resize-none" />
+                  <Button size="sm" disabled className="opacity-60">
+                    Send Reply via SMS
+                    <Badge variant="outline" className="ml-2 text-[10px]">Coming Soon</Badge>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}

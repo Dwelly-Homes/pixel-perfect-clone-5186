@@ -20,13 +20,32 @@ import { toast } from "sonner";
 
 export default function PropertyDetail() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [currentImage, setCurrentImage] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [inquiryOpen, setInquiryOpen] = useState(false);
   const [viewingOpen, setViewingOpen] = useState(false);
   const [favorited, setFavorited] = useState(false);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      favorited ? api.delete(`/properties/${id}/save`) : api.post(`/properties/${id}/save`),
+    onSuccess: () => {
+      setFavorited((v) => !v);
+      queryClient.invalidateQueries({ queryKey: ["savedProperties"] });
+      toast.success(favorited ? "Removed from saved" : "Property saved!");
+    },
+    onError: () => toast.error("Failed to update saved properties"),
+  });
+
+  function handleHeartClick() {
+    if (!isAuthenticated) {
+      toast.info("Please log in to save properties");
+      return;
+    }
+    saveMutation.mutate();
+  }
 
   const { data: rawProperty, isLoading, isError } = useQuery({
     queryKey: ["property", id],
@@ -199,7 +218,8 @@ export default function PropertyDetail() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
-                    onClick={() => setFavorited(!favorited)}
+                    onClick={handleHeartClick}
+                    disabled={saveMutation.isPending}
                     className="h-10 w-10 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
                   >
                     <Heart className={`h-5 w-5 ${favorited ? "fill-secondary text-secondary" : "text-muted-foreground"}`} />

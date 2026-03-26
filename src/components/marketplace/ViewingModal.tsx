@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { api, getApiError } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ViewingModalProps {
   open: boolean;
@@ -20,6 +21,8 @@ const TIME_SLOTS = [
 ];
 
 export function ViewingModal({ open, onClose, propertyId, propertyTitle }: ViewingModalProps) {
+  const { user, isAuthenticated } = useAuth();
+
   const [date, setDate] = useState("");
   const [timeSlot, setTimeSlot] = useState("");
   const [name, setName] = useState("");
@@ -31,14 +34,19 @@ export function ViewingModal({ open, onClose, propertyId, propertyTitle }: Viewi
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!date || !timeSlot || !phone) return;
+    if (!date || !timeSlot) return;
+    if (!isAuthenticated && !phone) return;
+
+    const senderName = isAuthenticated ? user!.fullName : (name || "Anonymous");
+    const senderPhone = isAuthenticated ? user!.phone : `+254${phone.replace(/^0/, "")}`;
+
     setSubmitting(true);
     try {
       await api.post("/inquiries", {
         propertyId,
         inquiryType: "viewing_request",
-        senderName: name || "Anonymous",
-        senderPhone: `+254${phone.replace(/^0/, "")}`,
+        senderName,
+        senderPhone,
         message: `Viewing request for: ${propertyTitle}`,
         requestedDate: new Date(date).toISOString(),
         requestedTimeSlot: timeSlot,
@@ -61,11 +69,30 @@ export function ViewingModal({ open, onClose, propertyId, propertyTitle }: Viewi
         <p className="text-sm text-muted-foreground font-body mb-2">
           Schedule a visit for <strong>{propertyTitle}</strong>
         </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label className="font-body">Your Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="mt-1" />
+
+        {isAuthenticated ? (
+          <div className="rounded-md bg-muted px-4 py-3 mb-2 text-sm font-body text-muted-foreground">
+            Booking as <strong className="text-foreground">{user!.fullName}</strong>
+            {user!.phone && <> &middot; {user!.phone}</>}
           </div>
+        ) : null}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {!isAuthenticated && (
+            <>
+              <div>
+                <Label className="font-body">Your Name</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className="mt-1" />
+              </div>
+              <div>
+                <Label className="font-body">Phone Number *</Label>
+                <div className="flex mt-1">
+                  <span className="flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">+254</span>
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="7XX XXX XXX" required className="rounded-l-none" />
+                </div>
+              </div>
+            </>
+          )}
           <div>
             <Label className="font-body flex items-center gap-2">
               <Calendar className="h-4 w-4" /> Preferred Date *
@@ -91,13 +118,6 @@ export function ViewingModal({ open, onClose, propertyId, propertyTitle }: Viewi
                   {slot.label}
                 </button>
               ))}
-            </div>
-          </div>
-          <div>
-            <Label className="font-body">Phone Number *</Label>
-            <div className="flex mt-1">
-              <span className="flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">+254</span>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="7XX XXX XXX" required className="rounded-l-none" />
             </div>
           </div>
           <button
