@@ -184,11 +184,11 @@ export default function TenantProfile() {
       )}
 
       {/* Tab nav */}
-      <div className="flex border-b">
+      <div className="flex border-b overflow-x-auto scrollbar-none">
         {TABS.map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={cn(
-              "px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5",
+              "px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 whitespace-nowrap shrink-0",
               tab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             )}>
             {t === "Profile"       && <User className="h-3.5 w-3.5" />}
@@ -252,7 +252,7 @@ export default function TenantProfile() {
               <Button
                 onClick={() => saveProfile.mutate()}
                 disabled={saveProfile.isPending}
-                className="bg-secondary hover:bg-secondary/90"
+                className="bg-secondary hover:bg-secondary/90 w-full sm:w-auto"
               >
                 {saveProfile.isPending
                   ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
@@ -377,7 +377,7 @@ export default function TenantProfile() {
               <Button
                 onClick={() => saveNotifPrefs.mutate()}
                 disabled={saveNotifPrefs.isPending}
-                className="bg-secondary hover:bg-secondary/90"
+                className="bg-secondary hover:bg-secondary/90 w-full sm:w-auto"
               >
                 {saveNotifPrefs.isPending
                   ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>

@@ -1,7 +1,13 @@
-import { Link } from "react-router-dom";
-import { Home, ChevronDown, LayoutDashboard, LogOut, UserCircle2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Home, ChevronDown, LayoutDashboard, LogOut, UserCircle2,
+  Search, Heart, Calendar, MessageSquare, CreditCard, Bell,
+  Users, Building2, MessagesSquare,
+} from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useAuth, type AuthUser } from "@/contexts/AuthContext";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
+import type { MobileNavItem } from "@/components/MobileBottomNav";
 
 function getDashboardLink(user: AuthUser): string {
   if (user.role === "platform_admin") return "/admin";
@@ -26,8 +32,61 @@ function getInitials(name: string): string {
 
 export function MarketplaceNav() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  function buildMobileNav(): { primary: MobileNavItem[]; more: MobileNavItem[] } | null {
+    if (!user) return null;
+
+    const signOut: MobileNavItem = {
+      label: "Sign Out", icon: LogOut,
+      onClick: () => { logout(); navigate("/login"); },
+    };
+
+    if (user.role === "searcher") {
+      return {
+        primary: [
+          { label: "Browse", href: "/", icon: Search, exact: true },
+          { label: "Saved", href: "/tenant/saved", icon: Heart },
+          { label: "Bookings", href: "/tenant/bookings", icon: Calendar },
+          { label: "Messages", href: "/tenant/messages", icon: MessageSquare },
+        ],
+        more: [
+          { label: "Dashboard", href: "/tenant", icon: LayoutDashboard },
+          { label: "Payments", href: "/tenant/payments", icon: CreditCard },
+          { label: "Alerts", href: "/tenant/notifications", icon: Bell },
+          { label: "Profile", href: "/tenant/profile", icon: UserCircle2 },
+          signOut,
+        ],
+      };
+    }
+
+    if (user.role === "platform_admin") {
+      return {
+        primary: [
+          { label: "Browse", href: "/", icon: Search, exact: true },
+          { label: "Overview", href: "/admin", icon: LayoutDashboard },
+          { label: "Agents", href: "/admin/agents", icon: Building2 },
+          { label: "Tenants", href: "/admin/tenants", icon: Users },
+        ],
+        more: [signOut],
+      };
+    }
+
+    // agent / landlord
+    return {
+      primary: [
+        { label: "Browse", href: "/", icon: Search, exact: true },
+        { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+        { label: "Properties", href: "/dashboard/properties", icon: Building2 },
+        { label: "Messages", href: "/dashboard/chat", icon: MessagesSquare },
+      ],
+      more: [signOut],
+    };
+  }
+
+  const mobileNav = buildMobileNav();
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -41,6 +100,7 @@ export function MarketplaceNav() {
   }, [menuOpen]);
 
   return (
+    <>
     <nav className="sticky top-0 z-30 bg-card/95 backdrop-blur-sm border-b border-border">
       <div className="container mx-auto px-4 h-14 flex items-center justify-between">
         {/* Logo */}
@@ -152,5 +212,9 @@ export function MarketplaceNav() {
         </div>
       </div>
     </nav>
+    {mobileNav && (
+      <MobileBottomNav primaryItems={mobileNav.primary} moreItems={mobileNav.more} />
+    )}
+    </>
   );
 }
