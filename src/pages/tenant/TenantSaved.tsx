@@ -65,9 +65,13 @@ export default function TenantSaved() {
     queryKey: ["savedProperties"],
     queryFn: async () => {
       const { data } = await api.get("/properties/saved");
-      // handle both { data: [...] } and { data: { savedProperties: [...] } }
-      const list = data?.data?.savedProperties ?? data?.data ?? [];
-      return list as SavedEntry[];
+      const raw =
+        data?.data?.savedProperties ??
+        data?.data?.items ??
+        data?.data ??
+        data ??
+        [];
+      return (Array.isArray(raw) ? raw : []) as SavedEntry[];
     },
   });
 

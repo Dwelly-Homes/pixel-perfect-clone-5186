@@ -157,17 +157,17 @@ export default function TenantBookings() {
       </div>
 
       <Tabs defaultValue="viewings" className="space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <TabsList>
-            <TabsTrigger value="viewings" className="font-body gap-1.5">
-              <Calendar className="h-4 w-4" /> Viewing Requests
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <TabsList className="self-start">
+            <TabsTrigger value="viewings" className="font-body gap-1.5 text-xs sm:text-sm">
+              <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Viewings
             </TabsTrigger>
-            <TabsTrigger value="inquiries" className="font-body gap-1.5">
-              <MessageSquare className="h-4 w-4" /> Inquiries
+            <TabsTrigger value="inquiries" className="font-body gap-1.5 text-xs sm:text-sm">
+              <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Inquiries
             </TabsTrigger>
           </TabsList>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[160px] font-body">
+            <SelectTrigger className="w-full sm:w-[160px] font-body">
               <Filter className="h-3.5 w-3.5 mr-1.5" />
               <SelectValue placeholder="Filter status" />
             </SelectTrigger>
@@ -228,41 +228,42 @@ export default function TenantBookings() {
                             <StatusIcon className="h-3 w-3" /> {config.label}
                           </Badge>
                         </div>
-                        <div className="flex flex-wrap gap-4 text-sm font-body text-muted-foreground">
-                          {booking.requestedDate && (
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3.5 w-3.5" />
-                              {format(new Date(booking.requestedDate), "EEE, MMM d, yyyy")}
-                            </span>
-                          )}
-                          {booking.requestedTimeSlot && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3.5 w-3.5" />
-                              {timeSlotLabel[booking.requestedTimeSlot]}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1 ml-auto text-[10px]">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm font-body text-muted-foreground">
+                            {booking.requestedDate && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                {format(new Date(booking.requestedDate), "EEE, MMM d, yyyy")}
+                              </span>
+                            )}
+                            {booking.requestedTimeSlot && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3.5 w-3.5 shrink-0" />
+                                {timeSlotLabel[booking.requestedTimeSlot]}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground font-body">
                             Submitted {formatDistanceToNow(new Date(booking.createdAt), { addSuffix: true })}
-                          </span>
+                          </p>
                         </div>
                         {agent && (
-                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-border flex-wrap">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1 border-t border-border">
                             <p className="text-sm font-body">
                               <span className="text-muted-foreground">Agent:</span> <strong>{agent.fullName}</strong>
                             </p>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
                               {booking.status === "responded" && agent.phone && (
-                                <a
-                                  href={`tel:${agent.phone}`}
-                                  className="text-sm text-secondary hover:underline font-body flex items-center gap-1"
-                                >
-                                  <Phone className="h-3.5 w-3.5" /> {agent.phone}
-                                </a>
+                                <Button size="sm" variant="outline" className="flex-1 sm:flex-none font-body text-xs gap-1" asChild>
+                                  <a href={`tel:${agent.phone}`}>
+                                    <Phone className="h-3.5 w-3.5" /> Call
+                                  </a>
+                                </Button>
                               )}
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="font-body text-xs gap-1"
+                                className="flex-1 sm:flex-none font-body text-xs gap-1"
                                 disabled={startingChatFor === booking._id}
                                 onClick={() => handleMessageAgent(booking)}
                               >
@@ -270,7 +271,7 @@ export default function TenantBookings() {
                                   ? <Loader2 className="h-3 w-3 animate-spin" />
                                   : <MessageSquare className="h-3 w-3" />
                                 }
-                                Message Agent
+                                Message
                               </Button>
                             </div>
                           </div>
@@ -332,7 +333,7 @@ export default function TenantBookings() {
                       <p className="text-sm font-body">{inquiry.message}</p>
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
                       {agent && (
                         <p className="text-xs text-muted-foreground font-body">Agent: {agent.fullName}</p>
                       )}
@@ -340,7 +341,7 @@ export default function TenantBookings() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="font-body text-xs gap-1"
+                          className="font-body text-xs gap-1 w-full sm:w-auto"
                           disabled={startingChatFor === inquiry._id}
                           onClick={() => handleMessageAgent(inquiry)}
                         >

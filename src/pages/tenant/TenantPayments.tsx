@@ -81,7 +81,7 @@ export default function TenantPayments() {
           <p className="text-muted-foreground font-body text-sm">Track your rent payments and payment history.</p>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: "Total Paid",    value: "KES 0", icon: TrendingUp,   iconColor: "text-green-600" },
             { label: "Next Due",      value: "—",      icon: Clock,        iconColor: "text-secondary" },
@@ -89,13 +89,13 @@ export default function TenantPayments() {
             { label: "Upcoming",      value: "None",   icon: AlertTriangle,iconColor: "text-amber-500" },
           ].map((stat) => (
             <Card key={stat.label}>
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                  <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
+              <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+                <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                  <stat.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${stat.iconColor}`} />
                 </div>
-                <div>
-                  <p className="text-xl font-bold font-heading">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground font-body">{stat.label}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm sm:text-base font-bold font-heading truncate">{stat.value}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground font-body leading-tight">{stat.label}</p>
                 </div>
               </CardContent>
             </Card>
@@ -103,11 +103,11 @@ export default function TenantPayments() {
         </div>
 
         <Card className="border-blue-200 bg-blue-50/40">
-          <CardContent className="p-5 flex items-start gap-4">
-            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
-              <Home className="h-5 w-5 text-blue-600" />
+          <CardContent className="p-4 sm:p-5 flex items-start gap-3 sm:gap-4">
+            <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+              <Home className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <p className="font-semibold text-sm">Rent payments are handled directly with your landlord or agent</p>
               <p className="text-sm text-muted-foreground font-body">
                 Once you move into a property sourced through Dwelly, your rent payment
@@ -158,55 +158,25 @@ export default function TenantPayments() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-              <TrendingUp className="h-5 w-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-lg font-bold font-heading">KES {lease.monthlyRent.toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground font-body">Monthly Rent</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-              <Clock className="h-5 w-5 text-secondary" />
-            </div>
-            <div>
-              <p className="text-lg font-bold font-heading">
-                {format(new Date(lease.leaseStart), "d MMM yyyy")}
-              </p>
-              <p className="text-xs text-muted-foreground font-body">Lease Start</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-              <CheckCircle2 className="h-5 w-5 text-blue-500" />
-            </div>
-            <div>
-              <p className="text-lg font-bold font-heading">KES {lease.depositAmount.toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground font-body">Deposit Paid</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-              <Calendar className="h-5 w-5 text-amber-500" />
-            </div>
-            <div>
-              <p className="text-lg font-bold font-heading">
-                {lease.leaseEnd ? format(new Date(lease.leaseEnd), "d MMM yyyy") : "Open-ended"}
-              </p>
-              <p className="text-xs text-muted-foreground font-body">Lease End</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { icon: TrendingUp, color: "text-green-600", value: `KES ${lease.monthlyRent.toLocaleString()}`, label: "Monthly Rent" },
+          { icon: Clock, color: "text-secondary", value: format(new Date(lease.leaseStart), "d MMM yyyy"), label: "Lease Start" },
+          { icon: CheckCircle2, color: "text-blue-500", value: `KES ${lease.depositAmount.toLocaleString()}`, label: "Deposit Paid" },
+          { icon: Calendar, color: "text-amber-500", value: lease.leaseEnd ? format(new Date(lease.leaseEnd), "d MMM yyyy") : "Open-ended", label: "Lease End" },
+        ].map((s) => (
+          <Card key={s.label}>
+            <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+              <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                <s.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${s.color}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm font-bold font-heading truncate">{s.value}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-body leading-tight">{s.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Property card */}
@@ -248,9 +218,9 @@ export default function TenantPayments() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-heading">Your Agent</CardTitle>
         </CardHeader>
-        <CardContent className="flex items-center justify-between flex-wrap gap-4">
+        <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-bold text-sm">
+            <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-bold text-sm shrink-0">
               <User className="h-5 w-5" />
             </div>
             <div>
@@ -262,18 +232,18 @@ export default function TenantPayments() {
               )}
             </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 w-full sm:w-auto">
             {agent.phone && (
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" variant="outline" className="flex-1 sm:flex-none" asChild>
                 <a href={`tel:${agent.phone}`}><Phone className="h-3.5 w-3.5 mr-1.5" />Call</a>
               </Button>
             )}
             {agent.email && (
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" variant="outline" className="flex-1 sm:flex-none" asChild>
                 <a href={`mailto:${agent.email}`}><Mail className="h-3.5 w-3.5 mr-1.5" />Email</a>
               </Button>
             )}
-            <Button size="sm" className="bg-secondary hover:bg-secondary/90" asChild>
+            <Button size="sm" className="bg-secondary hover:bg-secondary/90 flex-1 sm:flex-none" asChild>
               <Link to="/tenant/messages"><MessageSquare className="h-3.5 w-3.5 mr-1.5" />Message</Link>
             </Button>
           </div>

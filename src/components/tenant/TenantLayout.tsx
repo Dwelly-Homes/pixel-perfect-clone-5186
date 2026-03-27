@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { Home, Search, Heart, Bell, Calendar, CreditCard, MessageSquare, User, LogOut, Menu, X } from "lucide-react";
+import { Home, Search, Heart, Bell, Calendar, CreditCard, MessageSquare, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,11 +8,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 
 const navLinks = [
   { label: "Dashboard", href: "/tenant", icon: Home, exact: true },
@@ -32,7 +32,6 @@ export default function TenantLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   const isActive = (href: string, exact = false) =>
     exact ? location.pathname === href : location.pathname.startsWith(href);
@@ -133,53 +132,36 @@ export default function TenantLayout() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Mobile menu toggle */}
-            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(!mobileOpen)}>
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
           </div>
         </div>
 
-        {/* Mobile nav */}
-        {mobileOpen && (
-          <div className="md:hidden border-t bg-card px-4 py-3 space-y-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.label}
-                to={link.href}
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  isActive(link.href, link.exact)
-                    ? "bg-secondary/10 text-secondary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                )}
-              >
-                <link.icon className="h-4 w-4" />
-                {link.label}
-              </Link>
-            ))}
-            <Link
-              to="/tenant/profile"
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              <User className="h-4 w-4" />Profile & Settings
-            </Link>
-            <button
-              onClick={() => { setMobileOpen(false); handleLogout(); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
-            >
-              <LogOut className="h-4 w-4" />Sign Out
-            </button>
-          </div>
-        )}
       </header>
 
       {/* Page content */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 pb-20 md:pb-6">
         <Outlet />
       </main>
+
+      <MobileBottomNav
+        primaryItems={[
+          { label: "Home", href: "/tenant", icon: Home, exact: true },
+          { label: "Browse", href: "/", icon: Search, exact: true },
+          { label: "Saved", href: "/tenant/saved", icon: Heart },
+          { label: "Bookings", href: "/tenant/bookings", icon: Calendar },
+        ]}
+        moreItems={[
+          { label: "Payments", href: "/tenant/payments", icon: CreditCard },
+          { label: "Messages", href: "/tenant/messages", icon: MessageSquare },
+          {
+            label: "Alerts",
+            href: "/tenant/notifications",
+            icon: Bell,
+            badge: unreadCount,
+          },
+          { label: "Profile", href: "/tenant/profile", icon: User },
+          { label: "Sign Out", icon: LogOut, onClick: handleLogout },
+        ]}
+      />
     </div>
   );
 }

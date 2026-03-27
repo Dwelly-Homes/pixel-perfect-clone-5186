@@ -147,16 +147,16 @@ export default function TenantDashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-foreground">
+          <h1 className="font-heading text-xl sm:text-2xl font-bold text-foreground">
             Welcome back, {firstName(user?.fullName)} 👋
           </h1>
-          <p className="text-muted-foreground font-body mt-1">
+          <p className="text-muted-foreground font-body text-sm mt-0.5">
             Here's a summary of your activity on Dwelly Homes.
           </p>
         </div>
-        <Button asChild className="bg-secondary hover:bg-secondary/90 shrink-0">
+        <Button asChild className="bg-secondary hover:bg-secondary/90 w-full sm:w-auto shrink-0">
           <Link to="/"><Search className="h-4 w-4 mr-2" />Browse Properties</Link>
         </Button>
       </div>
@@ -173,43 +173,46 @@ export default function TenantDashboard() {
               </div>
             )}
             <div className="flex-1 p-4 space-y-3">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <Badge className="bg-green-100 text-green-700 border-0 text-xs">Active Tenancy</Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {TYPE_LABEL[lease.propertyId.propertyType] ?? lease.propertyId.propertyType}
-                    </Badge>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <Badge className="bg-green-100 text-green-700 border-0 text-xs">Active Tenancy</Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {TYPE_LABEL[lease.propertyId.propertyType] ?? lease.propertyId.propertyType}
+                      </Badge>
+                    </div>
+                    <p className="font-semibold font-heading text-sm sm:text-base truncate">{lease.propertyId.title}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{[lease.propertyId.streetEstate, lease.propertyId.neighborhood, lease.propertyId.county].filter(Boolean).join(", ")}</span>
+                    </p>
                   </div>
-                  <p className="font-semibold font-heading">{lease.propertyId.title}</p>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
-                    <MapPin className="h-3.5 w-3.5 shrink-0" />
-                    {[lease.propertyId.streetEstate, lease.propertyId.neighborhood, lease.propertyId.county].filter(Boolean).join(", ")}
-                  </p>
                 </div>
-                <Button size="sm" variant="outline" asChild>
-                  <Link to="/tenant/payments"><CreditCard className="h-3.5 w-3.5 mr-1.5" />View Details</Link>
-                </Button>
-              </div>
 
-              <div className="flex flex-wrap gap-4 text-sm">
-                <div className="flex items-center gap-1.5">
-                  <TrendingUp className="h-3.5 w-3.5 text-green-600" />
-                  <span className="font-medium">KES {lease.monthlyRent.toLocaleString()}</span>
-                  <span className="text-muted-foreground text-xs">/month</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-secondary" />
-                  <span className="text-muted-foreground text-xs">Since</span>
-                  <span className="font-medium">{format(new Date(lease.leaseStart), "d MMM yyyy")}</span>
-                </div>
-                {lease.leaseEnd && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-amber-500" />
-                    <span className="text-muted-foreground text-xs">Until</span>
-                    <span className="font-medium">{format(new Date(lease.leaseEnd), "d MMM yyyy")}</span>
+                    <TrendingUp className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                    <span className="font-medium text-xs sm:text-sm">KES {lease.monthlyRent.toLocaleString()}</span>
+                    <span className="text-muted-foreground text-xs">/mo</span>
                   </div>
-                )}
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-secondary shrink-0" />
+                    <span className="text-muted-foreground text-xs">Since</span>
+                    <span className="font-medium text-xs sm:text-sm">{format(new Date(lease.leaseStart), "d MMM yyyy")}</span>
+                  </div>
+                  {lease.leaseEnd && (
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                      <span className="text-muted-foreground text-xs">Until</span>
+                      <span className="font-medium text-xs sm:text-sm">{format(new Date(lease.leaseEnd), "d MMM yyyy")}</span>
+                    </div>
+                  )}
+                </div>
+
+                <Button size="sm" variant="outline" className="w-full sm:w-auto self-start" asChild>
+                  <Link to="/tenant/payments"><CreditCard className="h-3.5 w-3.5 mr-1.5" />View Tenancy Details</Link>
+                </Button>
               </div>
             </div>
           </div>
@@ -217,55 +220,57 @@ export default function TenantDashboard() {
       ) : null}
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          {
-            label: "Unread Messages",
-            value: chatsLoading ? null : unreadMessages,
-            icon: MessagesSquare,
-            iconColor: "text-secondary",
-            href: "/tenant/messages",
-          },
-          {
-            label: "Notifications",
-            value: notifLoading ? null : unreadNotifs,
-            icon: Bell,
-            iconColor: "text-blue-500",
-            href: "/tenant/notifications",
-          },
-          {
-            label: "Conversations",
-            value: chatsLoading ? null : conversations.length,
-            icon: MessageSquare,
-            iconColor: "text-green-600",
-            href: "/tenant/messages",
-          },
-          {
-            label: "Saved Properties",
-            value: savedCount,
-            icon: Heart,
-            iconColor: "text-destructive",
-            href: "/tenant/saved",
-          },
+          { label: "Unread Messages",   value: chatsLoading  ? null : unreadMessages,        icon: MessagesSquare, iconColor: "text-secondary",   href: "/tenant/messages" },
+          { label: "Notifications",     value: notifLoading  ? null : unreadNotifs,           icon: Bell,           iconColor: "text-blue-500",    href: "/tenant/notifications" },
+          { label: "Conversations",     value: chatsLoading  ? null : conversations.length,   icon: MessageSquare,  iconColor: "text-green-600",   href: "/tenant/messages" },
+          { label: "Saved Properties",  value: savedCount,                                    icon: Heart,          iconColor: "text-destructive", href: "/tenant/saved" },
         ].map((stat) => (
           <Link key={stat.label} to={stat.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                  <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
+            <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+              <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+                <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                  <stat.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${stat.iconColor}`} />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   {stat.value === null ? (
-                    <Skeleton className="h-7 w-8 mb-0.5" />
+                    <Skeleton className="h-6 w-8 mb-0.5" />
                   ) : (
-                    <p className="text-2xl font-bold font-heading text-foreground">{stat.value}</p>
+                    <p className="text-xl sm:text-2xl font-bold font-heading text-foreground leading-tight">{stat.value}</p>
                   )}
-                  <p className="text-xs text-muted-foreground font-body">{stat.label}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground font-body leading-tight">{stat.label}</p>
                 </div>
               </CardContent>
             </Card>
           </Link>
         ))}
+      </div>
+
+      {/* Mobile Quick Actions grid — shown only on mobile, before the messages section */}
+      <div className="lg:hidden">
+        <h2 className="font-heading text-base font-semibold text-foreground mb-3">Quick Actions</h2>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: "Browse",    href: "/",                     icon: Search,        color: "text-secondary bg-secondary/10" },
+            { label: "Messages",  href: "/tenant/messages",       icon: MessagesSquare,color: "text-blue-600 bg-blue-50" },
+            { label: "Bookings",  href: "/tenant/bookings",       icon: Calendar,      color: "text-green-600 bg-green-50" },
+            { label: "Saved",     href: "/tenant/saved",          icon: Heart,         color: "text-red-500 bg-red-50" },
+            { label: "Payments",  href: "/tenant/payments",       icon: CreditCard,    color: "text-purple-600 bg-purple-50" },
+            { label: "Settings",  href: "/tenant/profile",        icon: Settings,      color: "text-muted-foreground bg-muted" },
+          ].map((action) => (
+            <Link
+              key={action.label}
+              to={action.href}
+              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border bg-card hover:bg-muted/50 transition-colors"
+            >
+              <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${action.color}`}>
+                <action.icon className="h-5 w-5" />
+              </div>
+              <span className="text-[11px] font-medium text-foreground">{action.label}</span>
+            </Link>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -280,37 +285,37 @@ export default function TenantDashboard() {
                 <h2 className="font-heading text-lg font-semibold text-foreground">Your Agent / Landlord</h2>
               </div>
               <Card>
-                <CardContent className="p-4 flex items-center justify-between flex-wrap gap-4">
+                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="h-11 w-11 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center font-bold text-sm shrink-0">
                       <User className="h-5 w-5" />
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm">{lease.agentId.fullName}</p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm truncate">{lease.agentId.fullName}</p>
                       {lease.agentId.phone && (
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                           <Phone className="h-3 w-3" /> {lease.agentId.phone}
                         </p>
                       )}
                       {lease.agentId.email && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Mail className="h-3 w-3" /> {lease.agentId.email}
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                          <Mail className="h-3 w-3 shrink-0" /> {lease.agentId.email}
                         </p>
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 w-full sm:w-auto">
                     {lease.agentId.phone && (
-                      <Button size="sm" variant="outline" asChild>
+                      <Button size="sm" variant="outline" className="flex-1 sm:flex-none" asChild>
                         <a href={`tel:${lease.agentId.phone}`}><Phone className="h-3.5 w-3.5 mr-1.5" />Call</a>
                       </Button>
                     )}
                     {lease.agentId.email && (
-                      <Button size="sm" variant="outline" asChild>
+                      <Button size="sm" variant="outline" className="flex-1 sm:flex-none" asChild>
                         <a href={`mailto:${lease.agentId.email}`}><Mail className="h-3.5 w-3.5 mr-1.5" />Email</a>
                       </Button>
                     )}
-                    <Button size="sm" className="bg-secondary hover:bg-secondary/90" asChild>
+                    <Button size="sm" className="bg-secondary hover:bg-secondary/90 flex-1 sm:flex-none" asChild>
                       <Link to="/tenant/messages"><MessageSquare className="h-3.5 w-3.5 mr-1.5" />Message</Link>
                     </Button>
                   </div>
@@ -321,7 +326,7 @@ export default function TenantDashboard() {
 
           {/* Recent Conversations */}
           <div className="flex items-center justify-between">
-            <h2 className="font-heading text-lg font-semibold text-foreground">Recent Messages</h2>
+            <h2 className="font-heading text-base sm:text-lg font-semibold text-foreground">Recent Messages</h2>
             <Button variant="ghost" size="sm" className="font-body text-secondary" asChild>
               <Link to="/tenant/messages">View All <ChevronRight className="h-4 w-4 ml-1" /></Link>
             </Button>
@@ -400,7 +405,7 @@ export default function TenantDashboard() {
 
           {/* Saved Properties */}
           <div className="flex items-center justify-between mt-2">
-            <h2 className="font-heading text-lg font-semibold text-foreground">Saved Properties</h2>
+            <h2 className="font-heading text-base sm:text-lg font-semibold text-foreground">Saved Properties</h2>
             <Button variant="ghost" size="sm" className="font-body text-secondary" asChild>
               <Link to="/tenant/saved">View All <ChevronRight className="h-4 w-4 ml-1" /></Link>
             </Button>
@@ -432,7 +437,7 @@ export default function TenantDashboard() {
         <div className="space-y-4">
           {/* Recent Activity from notifications */}
           <div className="flex items-center justify-between">
-            <h2 className="font-heading text-lg font-semibold text-foreground">Recent Activity</h2>
+            <h2 className="font-heading text-base sm:text-lg font-semibold text-foreground">Recent Activity</h2>
             <Button variant="ghost" size="sm" className="text-secondary" asChild>
               <Link to="/tenant/notifications">View All <ChevronRight className="h-4 w-4 ml-1" /></Link>
             </Button>
@@ -486,8 +491,8 @@ export default function TenantDashboard() {
             )}
           </Card>
 
-          {/* Profile Card */}
-          <Card>
+          {/* Profile Card — hidden on mobile */}
+          <Card className="hidden lg:block">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-heading">My Profile</CardTitle>
             </CardHeader>
@@ -513,8 +518,8 @@ export default function TenantDashboard() {
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
-          <Card>
+          {/* Quick Actions — hidden on mobile (shown as icon grid above) */}
+          <Card className="hidden lg:block">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-heading">Quick Actions</CardTitle>
             </CardHeader>

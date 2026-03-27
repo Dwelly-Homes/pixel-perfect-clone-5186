@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
+import type { MobileNavItem } from "@/components/MobileBottomNav";
 
 const navGroups = [
   {
@@ -70,9 +72,25 @@ export function AdminLayout() {
   if (isLoading) return null;
   if (!isAuthenticated || user?.role !== "platform_admin") return null;
 
+  const mobilePrimaryItems: MobileNavItem[] = [
+    { label: "Overview", href: "/admin", icon: LayoutDashboard, exact: true },
+    { label: "Agents", href: "/admin/agents", icon: Building2 },
+    { label: "Tenants", href: "/admin/tenants", icon: Users },
+    { label: "Verify", href: "/admin/verifications", icon: ShieldCheck },
+  ];
+
+  const mobileMoreItems: MobileNavItem[] = [
+    { label: "Properties", href: "/admin/properties", icon: Home },
+    { label: "Landlords", href: "/admin/landlords", icon: UserSquare2 },
+    { label: "Billing", href: "/admin/billing", icon: CreditCard },
+    { label: "EARB", href: "/admin/earb", icon: BadgeCheck },
+    { label: "Audit Log", href: "/admin/audit", icon: ScrollText },
+    { label: "Sign Out", icon: LogOut, onClick: handleLogout },
+  ];
+
   return (
     <div className="flex h-screen bg-background">
-      <aside className="w-56 shrink-0 border-r flex flex-col bg-sidebar overflow-y-auto">
+      <aside className="hidden md:flex w-56 shrink-0 border-r flex-col bg-sidebar overflow-y-auto">
         <div className="p-4 border-b shrink-0">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-heading font-bold text-sm">D</div>
@@ -130,10 +148,11 @@ export function AdminLayout() {
             <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">{initials}</div>
           </div>
         </header>
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto pb-16 md:pb-0">
           <Outlet />
         </main>
       </div>
+      <MobileBottomNav primaryItems={mobilePrimaryItems} moreItems={mobileMoreItems} />
     </div>
   );
 }
