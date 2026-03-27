@@ -247,33 +247,7 @@ export default function TenantDashboard() {
         ))}
       </div>
 
-      {/* Mobile Quick Actions grid — shown only on mobile, before the messages section */}
-      <div className="lg:hidden">
-        <h2 className="font-heading text-base font-semibold text-foreground mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: "Browse",    href: "/",                     icon: Search,        color: "text-secondary bg-secondary/10" },
-            { label: "Messages",  href: "/tenant/messages",       icon: MessagesSquare,color: "text-blue-600 bg-blue-50" },
-            { label: "Bookings",  href: "/tenant/bookings",       icon: Calendar,      color: "text-green-600 bg-green-50" },
-            { label: "Saved",     href: "/tenant/saved",          icon: Heart,         color: "text-red-500 bg-red-50" },
-            { label: "Payments",  href: "/tenant/payments",       icon: CreditCard,    color: "text-purple-600 bg-purple-50" },
-            { label: "Settings",  href: "/tenant/profile",        icon: Settings,      color: "text-muted-foreground bg-muted" },
-          ].map((action) => (
-            <Link
-              key={action.label}
-              to={action.href}
-              className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-border bg-card hover:bg-muted/50 transition-colors"
-            >
-              <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${action.color}`}>
-                <action.icon className="h-5 w-5" />
-              </div>
-              <span className="text-[11px] font-medium text-foreground">{action.label}</span>
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* ─── Left column ──────────────────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-4">
