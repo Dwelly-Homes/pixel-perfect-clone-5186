@@ -113,13 +113,6 @@ export function MarketplaceNav() {
 
         {/* Right side */}
         <div className="flex items-center gap-3">
-          <Link
-            to="/"
-            className="text-sm font-body text-muted-foreground hover:text-foreground transition-colors hidden sm:inline"
-          >
-            Marketplace
-          </Link>
-
           {user ? (
             <>
               {/* Dashboard quick link */}
