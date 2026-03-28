@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/contexts/AuthContext";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import type { MobileNavItem } from "@/components/MobileBottomNav";
-import { Home, Building2, MessageSquare, MessagesSquare } from "lucide-react";
+import { Home, Building2, MessageSquare, MessagesSquare, LayoutDashboard } from "lucide-react";
 
 function DashboardMobileNav() {
   const { toggleSidebar } = useSidebar();
@@ -15,12 +15,10 @@ function DashboardMobileNav() {
   const canSee = (roles?: UserRole[]) => !roles || roles.includes(user?.role as UserRole);
 
   const primaryItems: MobileNavItem[] = [
-    { label: "Home", href: "/dashboard", icon: Home, exact: true },
+    { label: "Home", href: "/", icon: Home, exact: true },
+    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
     ...(canSee(["tenant_admin", "agent_staff"])
       ? [{ label: "Properties", href: "/dashboard/properties", icon: Building2 }]
-      : []),
-    ...(canSee(["tenant_admin", "agent_staff"])
-      ? [{ label: "Inquiries", href: "/dashboard/inquiries", icon: MessageSquare }]
       : []),
     { label: "Messages", href: "/dashboard/chat", icon: MessagesSquare },
   ];
