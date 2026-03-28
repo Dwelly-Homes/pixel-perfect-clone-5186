@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Home, ChevronDown, LayoutDashboard, LogOut, UserCircle2,
   Search, Heart, Calendar, MessageSquare, CreditCard, Bell,
-  Users, Building2, MessagesSquare,
+  Users, Building2, MessagesSquare, LogIn, UserPlus,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useAuth, type AuthUser } from "@/contexts/AuthContext";
@@ -36,8 +36,17 @@ export function MarketplaceNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  function buildMobileNav(): { primary: MobileNavItem[]; more: MobileNavItem[] } | null {
-    if (!user) return null;
+  function buildMobileNav(): { primary: MobileNavItem[]; more: MobileNavItem[] } {
+    if (!user) {
+      return {
+        primary: [
+          { label: "Browse", href: "/", icon: Search, exact: true },
+          { label: "Sign In", href: "/login", icon: LogIn },
+          { label: "Register", href: "/register", icon: UserPlus },
+        ],
+        more: [],
+      };
+    }
 
     const signOut: MobileNavItem = {
       label: "Sign Out", icon: LogOut,
@@ -190,13 +199,13 @@ export function MarketplaceNav() {
             <>
               <Link
                 to="/login"
-                className="text-sm font-body text-muted-foreground hover:text-foreground transition-colors hidden sm:inline"
+                className="rounded-md border border-border px-3.5 py-2 text-sm font-body font-medium text-foreground hover:bg-muted transition-colors"
               >
                 Sign In
               </Link>
               <Link
                 to="/register"
-                className="rounded-md bg-secondary px-4 py-2 text-sm font-body font-medium text-secondary-foreground hover:bg-orange-dark transition-colors"
+                className="rounded-md bg-secondary px-3.5 py-2 text-sm font-body font-medium text-secondary-foreground hover:bg-orange-dark transition-colors hidden sm:inline-flex"
               >
                 List Property
               </Link>
@@ -205,9 +214,7 @@ export function MarketplaceNav() {
         </div>
       </div>
     </nav>
-    {mobileNav && (
-      <MobileBottomNav primaryItems={mobileNav.primary} moreItems={mobileNav.more} />
-    )}
+    <MobileBottomNav primaryItems={mobileNav.primary} moreItems={mobileNav.more} />
     </>
   );
 }
