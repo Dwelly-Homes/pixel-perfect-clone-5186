@@ -199,7 +199,7 @@ export default function Marketplace() {
         onToggleFilters={() => setFiltersOpen(!filtersOpen)}
       />
 
-      <div className="container mx-auto px-4 py-6 flex-1">
+      <div className="container mx-auto px-4 py-6 flex-1 relative">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
           <p className="text-sm text-muted-foreground font-body">
             {isLoading ? (
