@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, MapPin, BadgeCheck, Shield, Heart, Share2,
   Check, ChevronLeft, ChevronRight, X, Send, Eye, Calendar,
-  Globe, Pencil, AlertTriangle,
+  Globe, Pencil, AlertTriangle, ExternalLink,
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
@@ -21,6 +21,7 @@ import { Footer } from "@/components/marketplace/Footer";
 import { InquiryModal } from "@/components/marketplace/InquiryModal";
 import { ViewingModal } from "@/components/marketplace/ViewingModal";
 import { PropertyCard } from "@/components/marketplace/PropertyCard";
+import { ShareModal } from "@/components/marketplace/ShareModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -36,6 +37,7 @@ export default function PropertyDetail() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [inquiryOpen, setInquiryOpen] = useState(false);
   const [viewingOpen, setViewingOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [favorited, setFavorited] = useState(false);
 
   const saveMutation = useMutation({
@@ -234,7 +236,10 @@ export default function PropertyDetail() {
                   >
                     <Heart className={`h-5 w-5 ${favorited ? "fill-secondary text-secondary" : "text-muted-foreground"}`} />
                   </button>
-                  <button className="h-10 w-10 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors">
+                  <button 
+                    onClick={() => setShareOpen(true)}
+                    className="h-10 w-10 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+                  >
                     <Share2 className="h-5 w-5 text-muted-foreground" />
                   </button>
                 </div>
@@ -282,7 +287,16 @@ export default function PropertyDetail() {
                 const zoom = hasPin ? 15 : 11;
                 return (
                   <div className="space-y-2">
-                    <div className="rounded-xl overflow-hidden border border-border h-72">
+                    <div className="relative rounded-xl overflow-hidden border border-border h-72">
+                      <a
+                        href={`https://www.openstreetmap.org/?mlat=${center[0]}&mlon=${center[1]}#map=${zoom}/${center[0]}/${center[1]}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="absolute top-2 right-2 z-[1000] h-8 px-3 rounded-md bg-card/90 backdrop-blur-sm border border-border flex items-center gap-1.5 text-xs font-body text-foreground hover:bg-card transition-colors shadow-sm"
+                        title="Open full map in new tab"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" /> Full Map
+                      </a>
                       <MapContainer
                         key={`${center[0]}-${center[1]}`}
                         center={center}
@@ -489,6 +503,13 @@ export default function PropertyDetail() {
         onClose={() => setViewingOpen(false)}
         propertyId={rawProperty._id}
         propertyTitle={property.title}
+      />
+      
+      <ShareModal 
+        open={shareOpen} 
+        onClose={() => setShareOpen(false)} 
+        url={window.location.href} 
+        title={property.title} 
       />
     </div>
   );

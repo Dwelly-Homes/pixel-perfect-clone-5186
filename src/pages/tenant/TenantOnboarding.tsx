@@ -39,10 +39,7 @@ const STEPS = [
   { label: "Complete", icon: CheckCircle2 },
 ];
 
-const KENYAN_COUNTIES = [
-  "Nairobi", "Mombasa", "Kisumu", "Nakuru", "Kiambu",
-  "Machakos", "Kajiado", "Uasin Gishu", "Kilifi", "Nyeri",
-];
+import { useCounties } from "@/hooks/useCounties";
 
 const AMENITIES = [
   "Parking", "Swimming Pool", "Gym", "Security", "Garden",
@@ -59,6 +56,8 @@ const DOCUMENT_TYPES = [
 
 export default function TenantOnboarding() {
   const navigate = useNavigate();
+  const { data: counties = [] } = useCounties();
+  const countyNames = counties.map(c => c.name);
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -270,7 +269,7 @@ export default function TenantOnboarding() {
                     <SelectValue placeholder="Select county" />
                   </SelectTrigger>
                   <SelectContent>
-                    {KENYAN_COUNTIES.map((c) => (
+                    {countyNames.map((c) => (
                       <SelectItem key={c} value={c}>{c}</SelectItem>
                     ))}
                   </SelectContent>

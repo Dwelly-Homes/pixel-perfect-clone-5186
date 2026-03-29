@@ -46,8 +46,8 @@ export function FilterSidebar({
 
       <aside
         className={`
-          fixed md:sticky top-0 md:top-4 left-0 z-50 md:z-0
-          h-full md:h-auto w-72 md:w-64 shrink-0
+          fixed md:sticky top-0 md:top-20 left-0 z-50 md:z-0
+          h-full md:h-[calc(100vh-5rem)] w-72 md:w-64 shrink-0
           bg-card border-r md:border md:rounded-lg border-border
           overflow-y-auto p-5
           transition-transform duration-300
@@ -95,6 +95,7 @@ export function FilterSidebar({
             min={0}
             max={150000}
             step={5000}
+            minStepsBetweenThumbs={1}
             value={priceRange}
             onValueChange={(val) => onPriceRangeSliderChange(val as [number, number])}
             className="mb-2"

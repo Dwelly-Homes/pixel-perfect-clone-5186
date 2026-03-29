@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { KENYAN_COUNTIES } from "@/data/properties";
+import { useCounties } from "@/hooks/useCounties";
 import { toast } from "sonner";
 import { api, getApiError } from "@/lib/api";
 
@@ -111,6 +111,10 @@ export default function PropertyForm() {
   // Map / location
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
+
+  // Fetch counties
+  const { data: counties = [] } = useCounties();
+  const countyNames = counties.map(c => c.name);
 
   // Load existing property for editing
   const { data: editData, isLoading: loadingProperty } = useQuery({
@@ -407,7 +411,7 @@ export default function PropertyForm() {
                     <SelectValue placeholder="Select county" />
                   </SelectTrigger>
                   <SelectContent>
-                    {KENYAN_COUNTIES.map((c) => (
+                    {countyNames.map((c) => (
                       <SelectItem key={c} value={c}>{c}</SelectItem>
                     ))}
                   </SelectContent>

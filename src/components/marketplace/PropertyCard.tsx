@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 interface PropertyCardProps {
   property: Property;
@@ -16,6 +17,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [favorited, setFavorited] = useState(false);
+  const navigate = useNavigate()
 
   const formattedPrice = new Intl.NumberFormat("en-KE").format(property.price);
 
@@ -48,7 +50,8 @@ export function PropertyCard({ property }: PropertyCardProps) {
         <img
           src={property.images[0]}
           alt={property.title}
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          onClick={()=>navigate(`/marketplace/${property.id}`)}
+          className="h-full w-full cursor-pointer object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
         />
         {/* Badges */}

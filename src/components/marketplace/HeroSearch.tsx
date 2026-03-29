@@ -1,7 +1,8 @@
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { KENYAN_COUNTIES, PROPERTY_TYPES, PRICE_RANGES } from "@/data/properties";
+import { PROPERTY_TYPES, PRICE_RANGES } from "@/data/properties";
+import { useCounties } from "@/hooks/useCounties";
 import heroImage from "@/assets/hero-nairobi.jpg";
 
 interface HeroSearchProps {
@@ -27,6 +28,9 @@ export function HeroSearch({
   onPriceRangeChange,
   onToggleFilters,
 }: HeroSearchProps) {
+  const { data: counties = [] } = useCounties();
+  const countyNames = counties.map(c => c.name);
+
   return (
     <section className="relative overflow-hidden">
       {/* Background */}
@@ -66,7 +70,7 @@ export function HeroSearch({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Counties</SelectItem>
-                {KENYAN_COUNTIES.map(c => (
+                {countyNames.map(c => (
                   <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
               </SelectContent>

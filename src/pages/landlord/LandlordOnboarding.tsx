@@ -41,10 +41,7 @@ const STEPS = [
   { label: "Complete", icon: CheckCircle2 },
 ];
 
-const KENYAN_COUNTIES = [
-  "Nairobi", "Mombasa", "Kisumu", "Nakuru", "Kiambu",
-  "Machakos", "Kajiado", "Uasin Gishu", "Kilifi", "Nyeri",
-];
+import { useCounties } from "@/hooks/useCounties";
 
 const PROPERTY_TYPES = ["Apartment", "House", "Townhouse", "Studio", "Bedsitter", "Commercial"];
 
@@ -68,6 +65,8 @@ interface PortfolioProperty {
 
 export default function LandlordOnboarding() {
   const navigate = useNavigate();
+  const { data: counties = [] } = useCounties();
+  const countyNames = counties.map(c => c.name);
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -321,7 +320,7 @@ export default function LandlordOnboarding() {
                       <Label className="font-body text-xs">County *</Label>
                       <Select value={newProp.county} onValueChange={(v) => setNewProp({ ...newProp, county: v })}>
                         <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                        <SelectContent>{KENYAN_COUNTIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                        <SelectContent>{countyNames.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-1.5">
