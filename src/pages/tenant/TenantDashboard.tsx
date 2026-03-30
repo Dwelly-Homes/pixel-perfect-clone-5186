@@ -96,7 +96,8 @@ export default function TenantDashboard() {
       const { data } = await api.get("/leases/my");
       return data?.data as Lease | null;
     },
-    staleTime: 60_000,
+    staleTime: 0,
+    refetchInterval: 30_000,
   });
 
   // Conversations → unread messages count
