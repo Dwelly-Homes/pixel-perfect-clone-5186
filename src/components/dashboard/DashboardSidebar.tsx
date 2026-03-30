@@ -16,6 +16,7 @@ import {
   DollarSign,
   Building,
   UserPlus,
+  Banknote,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -51,6 +52,7 @@ const mainNav: NavItem[] = [
 ];
 
 const manageNav: NavItem[] = [
+  { title: "Rent Payments", url: "/dashboard/rent-payments", icon: Banknote, roles: ["tenant_admin", "agent_staff"] },
   { title: "Team", url: "/dashboard/team", icon: Users, roles: ["tenant_admin"] },
   { title: "Commissions", url: "/dashboard/commissions", icon: DollarSign, roles: ["tenant_admin"] },
   { title: "Verification", url: "/dashboard/verification", icon: ShieldCheck, roles: ["tenant_admin"] },
