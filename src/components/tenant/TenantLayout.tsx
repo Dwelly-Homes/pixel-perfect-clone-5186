@@ -47,7 +47,13 @@ export default function TenantLayout() {
   });
   const unreadCount = notifData ?? 0;
 
-  function handleLogout() {
+  async function handleLogout() {
+    try {
+      const refreshToken = localStorage.getItem("refreshToken");
+      await api.post("/auth/logout", { refreshToken });
+    } catch {
+      // ignore
+    }
     logout();
     navigate("/login");
   }

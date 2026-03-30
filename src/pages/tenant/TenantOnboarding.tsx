@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api, getApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -124,13 +125,17 @@ export default function TenantOnboarding() {
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await api.put("/auth/me", { occupation, employer, bio: bio || undefined });
       toast.success("Onboarding complete! Welcome to Dwelly Homes.");
       navigate("/tenant");
-    }, 1200);
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
