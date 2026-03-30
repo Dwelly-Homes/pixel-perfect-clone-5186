@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(find 'c:\\\\Users\\\\HP\\\\Documents\\\\Dwelly Homes\\\\pixel-perfect-clone-5186\\\\src\\\\pages' -type f -name *.tsx -o -name *.ts)",
+      "Bash(find 'c:\\\\Users\\\\HP\\\\Documents\\\\Dwelly Homes\\\\dwelly-backend\\\\src\\\\models' -type f -name *.ts)"
     ]
   }
 }

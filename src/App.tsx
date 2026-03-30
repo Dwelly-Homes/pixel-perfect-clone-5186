@@ -28,6 +28,7 @@ import Notifications from "./pages/dashboard/Notifications.tsx";
 import Chat from "./pages/dashboard/Chat.tsx";
 import Verification from "./pages/dashboard/Verification.tsx";
 import Commissions from "./pages/dashboard/Commissions.tsx";
+import RentPayments from "./pages/dashboard/RentPayments.tsx";
 import Billing from "./pages/dashboard/Billing.tsx";
 import BillingPlans from "./pages/dashboard/BillingPlans.tsx";
 import BillingHistory from "./pages/dashboard/BillingHistory.tsx";
@@ -113,6 +114,7 @@ const App = () => (
             <Route path="notifications" element={<Notifications />} />
             <Route path="chat" element={<Chat />} />
             <Route path="verification" element={<RoleGuard roles={["tenant_admin"]}><Verification /></RoleGuard>} />
+            <Route path="rent-payments" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><RentPayments /></RoleGuard>} />
             <Route path="commissions" element={<RoleGuard roles={["tenant_admin"]}><Commissions /></RoleGuard>} />
             <Route path="billing" element={<RoleGuard roles={["tenant_admin"]}><Billing /></RoleGuard>} />
             <Route path="billing/plans" element={<RoleGuard roles={["tenant_admin"]}><BillingPlans /></RoleGuard>} />
