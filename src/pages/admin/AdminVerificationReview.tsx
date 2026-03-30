@@ -70,7 +70,7 @@ export default function AdminVerificationReview() {
 
   if (isLoading) {
     return (
-      <div className="p-6 max-w-4xl">
+      <div className="p-6 max-w-8xl">
         <div className="h-8 bg-muted rounded w-64 mb-4 animate-pulse" />
         <div className="space-y-4">
           <div className="h-32 bg-muted rounded animate-pulse" />
@@ -87,7 +87,7 @@ export default function AdminVerificationReview() {
   const isEstateAgent = tenant?.accountType === "estate_agent";
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
+    <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate("/admin/verifications")}>
           <ArrowLeft className="h-4 w-4" />

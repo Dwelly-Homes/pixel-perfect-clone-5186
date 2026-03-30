@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import type { MobileNavItem } from "@/components/MobileBottomNav";
+import { AdminNotificationBell } from "./AdminNotificationBell";
 
 const navGroups = [
   {
@@ -33,6 +34,7 @@ const navGroups = [
     items: [
       { title: "Verifications", url: "/admin/verifications", icon: ShieldCheck },
       { title: "Billing", url: "/admin/billing", icon: CreditCard },
+      { title: "Notifications", url: "/admin/notifications", icon: Bell },
       { title: "EARB Tracker", url: "/admin/earb", icon: BadgeCheck },
       { title: "Audit Log", url: "/admin/audit", icon: ScrollText },
     ],
@@ -83,6 +85,7 @@ export function AdminLayout() {
     { label: "Properties", href: "/admin/properties", icon: Home },
     { label: "Landlords", href: "/admin/landlords", icon: UserSquare2 },
     { label: "Billing", href: "/admin/billing", icon: CreditCard },
+    { label: "Notifications", href: "/admin/notifications", icon: Bell },
     { label: "EARB", href: "/admin/earb", icon: BadgeCheck },
     { label: "Audit Log", href: "/admin/audit", icon: ScrollText },
     { label: "Sign Out", icon: LogOut, onClick: handleLogout },
@@ -142,13 +145,11 @@ export function AdminLayout() {
         <header className="h-14 border-b flex items-center justify-between px-6 shrink-0">
           <p className="text-sm font-medium text-muted-foreground">Admin Portal</p>
           <div className="flex items-center gap-3">
-            <button className="relative h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors">
-              <Bell className="h-4 w-4" />
-            </button>
+            <AdminNotificationBell />
             <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">{initials}</div>
           </div>
         </header>
-        <main className="flex-1 overflow-auto pb-16 md:pb-0">
+        <main className="flex-1 max-w-8xl overflow-auto pb-16 md:pb-0">
           <Outlet />
         </main>
       </div>

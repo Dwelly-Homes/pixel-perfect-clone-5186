@@ -66,7 +66,7 @@ export default function AdminAgents() {
   const activeCount = agents.filter((a) => a.status === "active").length;
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl">
+    <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-heading font-bold">Agents & Agencies</h1>
         <p className="text-sm text-muted-foreground mt-1">Manage all registered estate agents on the platform.</p>

@@ -59,6 +59,7 @@ import AdminLandlordDetail from "./pages/admin/AdminLandlordDetail.tsx";
 import AdminProperties from "./pages/admin/AdminProperties.tsx";
 import AdminBilling from "./pages/admin/AdminBilling.tsx";
 import AdminDisputes from "./pages/admin/AdminDisputes.tsx";
+import AdminNotifications from "./pages/admin/AdminNotifications.tsx";
 
 const queryClient = new QueryClient();
 
@@ -133,6 +134,7 @@ const App = () => (
             <Route path="properties" element={<AdminProperties />} />
             <Route path="billing" element={<AdminBilling />} />
             <Route path="disputes" element={<AdminDisputes />} />
+            <Route path="notifications" element={<AdminNotifications />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
