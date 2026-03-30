@@ -81,7 +81,7 @@ export default function AdminDashboard() {
   ] : [];
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl">
+    <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-heading font-bold">Admin Overview</h1>
         <p className="text-sm text-muted-foreground mt-1">Platform health and key metrics at a glance.</p>

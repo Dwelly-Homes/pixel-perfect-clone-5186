@@ -75,7 +75,7 @@ export default function AdminEarbTracker() {
   const expiringSoon = withDays.filter((a) => a.days >= 0 && a.days <= 30).length;
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="p-6 space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-heading font-bold">EARB Tracker</h1>

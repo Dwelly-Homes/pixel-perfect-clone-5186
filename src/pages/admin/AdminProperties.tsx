@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, MapPin, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, MapPin, PieChart as PieChartIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 const LIMIT = 15;
 
@@ -42,6 +42,51 @@ const TYPE_LABEL: Record<string, string> = {
   commercial: "Commercial",
 };
 
+const AREA_CHART_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(var(--secondary))",
+  "hsl(var(--info))",
+  "hsl(var(--success))",
+  "hsl(var(--warning))",
+];
+
+type AreaStat = {
+  area: string;
+  total: number;
+  occupied: number;
+};
+
+type AreaSlice = AreaStat & {
+  value: number;
+  fill: string;
+  occupancyRate: number;
+};
+
+function AreaOccupancyTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: AreaSlice }>;
+}) {
+  if (!active || !payload?.length) return null;
+
+  const slice = payload[0]?.payload;
+  if (!slice) return null;
+
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 shadow-lg">
+      <p className="text-xs font-semibold">{slice.area}</p>
+      <p className="text-[11px] text-muted-foreground mt-0.5">
+        {slice.occupied} occupied of {slice.total} total
+      </p>
+      <p className="text-[11px] text-muted-foreground">
+        {slice.occupancyRate}% occupancy
+      </p>
+    </div>
+  );
+}
+
 export default function AdminProperties() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -71,10 +116,10 @@ export default function AdminProperties() {
   const totalRentRoll = properties.filter((p) => p.status === "occupied").reduce((s: number, p: { monthlyRent?: number }) => s + (p.monthlyRent || 0), 0);
 
   // Area breakdown from current page data
-  const areaMap: Record<string, { total: number; occupied: number }> = {};
+  const areaMap: Record<string, AreaStat> = {};
   properties.forEach((p) => {
     const area = p.neighborhood || p.county || "Other";
-    if (!areaMap[area]) areaMap[area] = { total: 0, occupied: 0 };
+    if (!areaMap[area]) areaMap[area] = { area, total: 0, occupied: 0 };
     areaMap[area].total++;
     if (p.status === "occupied") areaMap[area].occupied++;
   });
@@ -82,9 +127,20 @@ export default function AdminProperties() {
     .map(([area, s]) => ({ area, ...s }))
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
+  const totalAreaUnits = areaStats.reduce((sum, area) => sum + area.total, 0);
+  const totalAreaOccupied = areaStats.reduce((sum, area) => sum + area.occupied, 0);
+  const areaColorMap = new Map(
+    areaStats.map((area, index) => [area.area, AREA_CHART_COLORS[index % AREA_CHART_COLORS.length]])
+  );
+  const areaChartData: AreaSlice[] = areaStats.map((area) => ({
+    ...area,
+    value: area.occupied,
+    fill: areaColorMap.get(area.area) || AREA_CHART_COLORS[0],
+    occupancyRate: area.total > 0 ? Math.round((area.occupied / area.total) * 100) : 0,
+  }));
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl">
+    <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-heading font-bold">All Properties</h1>
         <p className="text-sm text-muted-foreground mt-1">Platform-wide property inventory, occupancy, and rent roll.</p>
@@ -109,18 +165,78 @@ export default function AdminProperties() {
 
       {areaStats.length > 0 && (
         <Card>
-          <CardContent className="p-4 space-y-3">
-            <p className="text-sm font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-muted-foreground" />Occupancy by Area (current page)</p>
-            <div className="space-y-2.5">
-              {areaStats.map((a) => (
-                <div key={a.area}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-medium">{a.area}</span>
-                    <span className="text-muted-foreground">{a.occupied}/{a.total} occupied ({a.total > 0 ? Math.round((a.occupied / a.total) * 100) : 0}%)</span>
+          <CardContent className="p-4 space-y-4">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold flex items-center gap-2">
+                <PieChartIcon className="h-4 w-4 text-muted-foreground" />
+                Occupancy by Area (current page)
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Donut slices reflect occupied units across the top 5 areas on this page.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-[minmax(0,300px)_1fr] md:items-center">
+              <div className="relative mx-auto h-64 w-full max-w-[320px]">
+                {areaChartData.some((entry) => entry.value > 0) ? (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Tooltip content={<AreaOccupancyTooltip />} />
+                        <Pie
+                          data={areaChartData.filter((entry) => entry.value > 0)}
+                          dataKey="value"
+                          nameKey="area"
+                          innerRadius={72}
+                          outerRadius={102}
+                          paddingAngle={3}
+                          stroke="none"
+                        >
+                          {areaChartData
+                            .filter((entry) => entry.value > 0)
+                            .map((entry) => (
+                              <Cell key={entry.area} fill={entry.fill} />
+                            ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+                      <p className="text-3xl font-heading font-bold">{totalAreaOccupied}</p>
+                      <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">occupied units</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{totalAreaUnits} total listings</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-2xl border border-dashed bg-muted/30 px-4 text-center text-sm text-muted-foreground">
+                    No occupied units on this page yet.
                   </div>
-                  <Progress value={a.total > 0 ? (a.occupied / a.total) * 100 : 0} className="h-1.5" />
-                </div>
-              ))}
+                )}
+              </div>
+
+              <div className="space-y-2.5">
+                {areaStats.map((a) => {
+                  const color = areaColorMap.get(a.area) || AREA_CHART_COLORS[0];
+                  const rate = a.total > 0 ? Math.round((a.occupied / a.total) * 100) : 0;
+
+                  return (
+                    <div key={a.area} className="flex items-start gap-3 rounded-xl border bg-muted/30 px-3 py-2">
+                      <span className="mt-1.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-medium">{a.area}</span>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {a.occupied}/{a.total}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>{rate}% occupied</span>
+                          <span>{a.total} listings</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </CardContent>
         </Card>

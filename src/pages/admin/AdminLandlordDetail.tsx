@@ -93,7 +93,7 @@ export default function AdminLandlordDetail() {
   const occupancyRate = properties.length > 0 ? Math.round((rentedListings / properties.length) * 100) : 0;
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-start gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate("/admin/landlords")}>

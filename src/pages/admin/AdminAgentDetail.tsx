@@ -103,7 +103,7 @@ export default function AdminAgentDetail() {
   const planLimit = planLimits[tenant.subscriptionPlan] ?? 10;
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-start gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate("/admin/agents")}>
