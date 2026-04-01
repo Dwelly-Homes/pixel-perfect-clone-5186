@@ -59,10 +59,7 @@ import AdminLandlords from "./pages/admin/AdminLandlords.tsx";
 import AdminLandlordDetail from "./pages/admin/AdminLandlordDetail.tsx";
 import AdminProperties from "./pages/admin/AdminProperties.tsx";
 import AdminBilling from "./pages/admin/AdminBilling.tsx";
-<<<<<<< Updated upstream
 import AdminDisputes from "./pages/admin/AdminDisputes.tsx";
-=======
->>>>>>> Stashed changes
 import AdminNotifications from "./pages/admin/AdminNotifications.tsx";
 
 const queryClient = new QueryClient();
@@ -138,10 +135,7 @@ const App = () => (
             <Route path="landlords/:id" element={<AdminLandlordDetail />} />
             <Route path="properties" element={<AdminProperties />} />
             <Route path="billing" element={<AdminBilling />} />
-<<<<<<< Updated upstream
             <Route path="disputes" element={<AdminDisputes />} />
-=======
->>>>>>> Stashed changes
             <Route path="notifications" element={<AdminNotifications />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
