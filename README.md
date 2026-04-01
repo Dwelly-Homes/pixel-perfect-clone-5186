@@ -1,3 +1,10 @@
-# Welcome to your Lovable project
+# Dwelly Homes Frontend
 
-TODO: Document your project here
+## Environment
+
+Copy `./.env.example` to `.env` and configure:
+
+```env
+VITE_API_URL=http://localhost:5000/api/v1
+VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id
+```
