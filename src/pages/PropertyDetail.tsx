@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, MapPin, BadgeCheck, Shield, Heart, Share2,
   Check, ChevronLeft, ChevronRight, X, Send, Eye, Calendar,
-  Globe, Pencil, AlertTriangle, ExternalLink,
+  Globe, Pencil, AlertTriangle, ExternalLink, Building2, Layers,
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
@@ -25,7 +25,9 @@ import { ShareModal } from "@/components/marketplace/ShareModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import { transformProperty } from "@/lib/propertyTransform";
+import { transformProperty, transformUnit } from "@/lib/propertyTransform";
+import type { Unit } from "@/data/properties";
+import { generateMockUnits } from "@/data/mockUnits";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -39,6 +41,8 @@ export default function PropertyDetail() {
   const [viewingOpen, setViewingOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [favorited, setFavorited] = useState(false);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | undefined>();
+  const [unitStatusFilter, setUnitStatusFilter] = useState<"all" | "vacant" | "occupied">("all");
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -76,6 +80,22 @@ export default function PropertyDetail() {
     },
     enabled: !!rawProperty?.county,
   });
+
+  const { data: unitsRaw = [] } = useQuery({
+    queryKey: ["propertyUnits", id],
+    enabled: !!id,
+    queryFn: async () => {
+      try {
+        const { data } = await api.get(`/properties/${id}/units`);
+        const list = data.data || [];
+        return list.length > 0 ? list : generateMockUnits(id!);
+      } catch {
+        return generateMockUnits(id!);
+      }
+    },
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const units: Unit[] = (unitsRaw as any[]).map(transformUnit);
 
   const publishMutation = useMutation({
     mutationFn: (publish: boolean) =>
@@ -278,6 +298,88 @@ export default function PropertyDetail() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Available Units */}
+            {units.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-heading text-lg font-semibold text-foreground flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-muted-foreground" />
+                    Available Units
+                    <span className="text-sm font-normal text-muted-foreground font-body">
+                      ({units.filter((u) => u.status === "vacant").length} of {units.length} vacant)
+                    </span>
+                  </h2>
+                  <div className="flex items-center gap-1 text-xs font-body">
+                    {(["all", "vacant", "occupied"] as const).map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setUnitStatusFilter(f)}
+                        className={`px-2.5 py-1 rounded-md capitalize transition-colors ${
+                          unitStatusFilter === f
+                            ? "bg-secondary text-secondary-foreground"
+                            : "text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="divide-y divide-border rounded-lg border overflow-hidden">
+                  {units
+                    .filter((u) => unitStatusFilter === "all" || u.status === unitStatusFilter)
+                    .map((unit) => (
+                      <div key={unit.id} className="flex items-center justify-between px-4 py-3 bg-card hover:bg-muted/30 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="text-sm font-medium font-body w-14">{unit.unitNumber}</div>
+                          <div className="text-sm text-muted-foreground font-body">
+                            {unit.floorNumber !== undefined ? `Floor ${unit.floorNumber}` : "—"}
+                          </div>
+                          <Badge variant="outline" className="font-body text-xs">{unit.typeLabel}</Badge>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                              unit.status === "vacant"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {unit.status === "vacant" ? "Vacant" : "Occupied"}
+                          </span>
+                          <span className="font-heading font-bold text-secondary text-sm whitespace-nowrap">
+                            KES {unit.price.toLocaleString()}
+                            <span className="text-xs font-normal text-muted-foreground font-body">/mo</span>
+                          </span>
+                          {unit.status === "vacant" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs border-secondary text-secondary hover:bg-secondary hover:text-secondary-foreground"
+                              onClick={() => {
+                                setSelectedUnitId(unit.id);
+                                setInquiryOpen(true);
+                              }}
+                            >
+                              <Send className="h-3 w-3 mr-1" /> Inquire
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  {units.filter((u) => unitStatusFilter === "all" || u.status === unitStatusFilter).length === 0 && (
+                    <div className="text-center py-8 text-sm text-muted-foreground font-body">
+                      No {unitStatusFilter === "all" ? "" : unitStatusFilter} units found.
+                    </div>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground font-body flex items-center gap-1">
+                  <Layers className="h-3.5 w-3.5" />
+                  Prices may vary per unit. Contact the agent for full details.
+                </p>
               </div>
             )}
 
@@ -496,16 +598,28 @@ export default function PropertyDetail() {
 
       <InquiryModal
         open={inquiryOpen}
-        onClose={() => setInquiryOpen(false)}
+        onClose={() => { setInquiryOpen(false); setSelectedUnitId(undefined); }}
         propertyId={rawProperty._id}
         propertyTitle={property.title}
         agentName={property.agent.name}
+        units={units.map((u) => ({
+          id: u.id,
+          label: `${u.unitNumber} · ${u.typeLabel} · KES ${u.price.toLocaleString()}`,
+          status: u.status,
+        }))}
+        preselectedUnitId={selectedUnitId}
       />
       <ViewingModal
         open={viewingOpen}
-        onClose={() => setViewingOpen(false)}
+        onClose={() => { setViewingOpen(false); setSelectedUnitId(undefined); }}
         propertyId={rawProperty._id}
         propertyTitle={property.title}
+        units={units.map((u) => ({
+          id: u.id,
+          label: `${u.unitNumber} · ${u.typeLabel} · KES ${u.price.toLocaleString()}`,
+          status: u.status,
+        }))}
+        preselectedUnitId={selectedUnitId}
       />
       
       <ShareModal 

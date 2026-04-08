@@ -1,4 +1,4 @@
-import type { Property } from "@/data/properties";
+import type { Property, Unit, PropertyWithUnits } from "@/data/properties";
 
 const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80";
 
@@ -90,5 +90,55 @@ export function transformProperty(p: any): Property {
     },
     status: p.status === "available" ? "available" : p.status === "occupied" ? "occupied" : "under-maintenance",
     createdAt: p.createdAt || new Date().toISOString(),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function transformUnit(u: any): Unit {
+  const typeInfo = TYPE_MAP[u.unitType || u.type] || { label: u.unitType || u.type || "Unit", bedrooms: 0 };
+
+  // Images can be objects {url, isCover, order} or plain strings
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawImages: any[] = u.images || [];
+  const sortedImages = [...rawImages].sort((a, b) => {
+    if (a?.isCover) return -1;
+    if (b?.isCover) return 1;
+    return (a?.order ?? 0) - (b?.order ?? 0);
+  });
+  const imageUrls = sortedImages
+    .map((i) => (typeof i === "string" ? i : i?.url))
+    .filter(Boolean) as string[];
+
+  return {
+    id: u._id || u.id,
+    propertyId: u.propertyId || "",
+    unitNumber: u.unitNumber || "",
+    floorNumber: u.floorNumber !== undefined ? Number(u.floorNumber) : undefined,
+    type: u.unitType || u.type || "",
+    typeLabel: typeInfo.label,
+    price: u.monthlyRent ?? u.price ?? 0,
+    serviceCharge: u.serviceCharge,
+    status: u.status === "occupied" ? "occupied" : "vacant",
+    images: imageUrls,
+    notes: u.notes,
+    createdAt: u.createdAt || new Date().toISOString(),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function transformPropertyWithUnits(p: any): PropertyWithUnits {
+  const base = transformProperty(p);
+  const units: Unit[] = (p.units || []).map(transformUnit);
+  const vacantUnits = units.filter((u) => u.status === "vacant");
+  const startingPrice =
+    units.length > 0 ? Math.min(...units.map((u) => u.price)) : base.price;
+
+  return {
+    ...base,
+    price: startingPrice,
+    units,
+    totalUnits: p.totalUnits ?? units.length,
+    availableUnits: p.availableUnits ?? vacantUnits.length,
+    startingPrice,
   };
 }

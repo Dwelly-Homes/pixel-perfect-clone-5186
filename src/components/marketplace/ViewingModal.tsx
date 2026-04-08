@@ -1,17 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar, Clock, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { api, getApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+
+interface UnitOption {
+  id: string;
+  label: string;
+  status: "vacant" | "occupied";
+}
 
 interface ViewingModalProps {
   open: boolean;
   onClose: () => void;
   propertyId: string;
   propertyTitle: string;
+  /** When provided, shows a unit selector dropdown */
+  units?: UnitOption[];
+  /** Pre-select a specific unit */
+  preselectedUnitId?: string;
 }
 
 const TIME_SLOTS = [
@@ -20,17 +33,32 @@ const TIME_SLOTS = [
   { label: "Evening (5pm–7pm)", value: "evening" },
 ];
 
-export function ViewingModal({ open, onClose, propertyId, propertyTitle }: ViewingModalProps) {
+export function ViewingModal({
+  open,
+  onClose,
+  propertyId,
+  propertyTitle,
+  units,
+  preselectedUnitId,
+}: ViewingModalProps) {
   const { user, isAuthenticated } = useAuth();
 
   const [date, setDate] = useState("");
   const [timeSlot, setTimeSlot] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [selectedUnitId, setSelectedUnitId] = useState<string>(preselectedUnitId ?? "none");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setSelectedUnitId(preselectedUnitId ?? "none");
+  }, [preselectedUnitId, open]);
 
   const today = new Date().toISOString().split("T")[0];
   const maxDate = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+
+  const hasUnits = units && units.length > 0;
+  const vacantUnits = units?.filter((u) => u.status === "vacant") ?? [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,10 +72,11 @@ export function ViewingModal({ open, onClose, propertyId, propertyTitle }: Viewi
     try {
       await api.post("/inquiries", {
         propertyId,
+        ...(selectedUnitId && selectedUnitId !== "none" ? { unitId: selectedUnitId } : {}),
         inquiryType: "viewing_request",
         senderName,
         senderPhone,
-        message: `Viewing request for: ${propertyTitle}`,
+        message: `Viewing request for: ${propertyTitle}${selectedUnitId ? ` (Unit ${vacantUnits.find((u) => u.id === selectedUnitId)?.label ?? selectedUnitId})` : ""}`,
         requestedDate: new Date(date).toISOString(),
         requestedTimeSlot: timeSlot,
       });
@@ -93,6 +122,24 @@ export function ViewingModal({ open, onClose, propertyId, propertyTitle }: Viewi
               </div>
             </>
           )}
+
+          {hasUnits && (
+            <div>
+              <Label className="font-body">Specific Unit (optional)</Label>
+              <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="General property viewing" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">General property viewing</SelectItem>
+                  {vacantUnits.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
             <Label className="font-body flex items-center gap-2">
               <Calendar className="h-4 w-4" /> Preferred Date *

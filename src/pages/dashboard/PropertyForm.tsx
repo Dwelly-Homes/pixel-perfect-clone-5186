@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Save, Upload, X, Star, Trash2, MapPin } from "lucide-react";
+import { ArrowLeft, Save, Upload, X, Star, Trash2, MapPin, LayoutGrid } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Button } from "@/components/ui/button";
@@ -239,8 +239,12 @@ export default function PropertyForm() {
           toast.warning("Property created but some images failed to upload.");
         }
       }
-      toast.success("Property created successfully!");
-      navigate("/dashboard/properties");
+      toast.success("Property created! Now add units to this property.");
+      if (propertyId) {
+        navigate(`/dashboard/properties/${propertyId}/units`);
+      } else {
+        navigate("/dashboard/properties");
+      }
     },
     onError: (err) => toast.error(getApiError(err)),
   });
@@ -308,22 +312,32 @@ export default function PropertyForm() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/dashboard/properties">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-heading font-bold">
-            {isEditing ? "Edit Property" : "Add New Property"}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {isEditing
-              ? "Update your property listing details"
-              : "Create a new property listing for the marketplace"}
-          </p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to="/dashboard/properties">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-2xl font-heading font-bold">
+              {isEditing ? "Edit Property" : "Add Property"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {isEditing
+                ? "Update your property details — manage individual units separately"
+                : "Create the property (building/apartment), then add units"}
+            </p>
+          </div>
         </div>
+        {isEditing && id && (
+          <Button asChild variant="outline" className="shrink-0">
+            <Link to={`/dashboard/properties/${id}/units`}>
+              <LayoutGrid className="h-4 w-4 mr-2" />
+              Manage Units
+            </Link>
+          </Button>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -678,7 +692,7 @@ export default function PropertyForm() {
             ) : (
               <span className="flex items-center gap-2">
                 <Save className="h-4 w-4" />
-                {isEditing ? "Save Changes" : "Publish Listing"}
+                {isEditing ? "Save Changes" : "Save & Add Units"}
               </span>
             )}
           </Button>
