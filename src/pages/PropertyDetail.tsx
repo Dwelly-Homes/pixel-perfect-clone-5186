@@ -27,7 +27,6 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { transformProperty, transformUnit } from "@/lib/propertyTransform";
 import type { Unit } from "@/data/properties";
-import { generateMockUnits } from "@/data/mockUnits";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -85,14 +84,13 @@ export default function PropertyDetail() {
     queryKey: ["propertyUnits", id],
     enabled: !!id,
     queryFn: async () => {
-      try {
-        const { data } = await api.get(`/properties/${id}/units`);
-        const list = data.data || [];
-        return list.length > 0 ? list : generateMockUnits(id!);
-      } catch {
-        return generateMockUnits(id!);
-      }
+      // Units are embedded in the marketplace property response
+      // If already present on rawProperty, use them; else fetch separately
+      if (rawProperty?.units?.length) return rawProperty.units;
+      const { data } = await api.get(`/properties/${id}/units`);
+      return data.data || [];
     },
+    enabled: !!id && !!rawProperty,
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const units: Unit[] = (unitsRaw as any[]).map(transformUnit);

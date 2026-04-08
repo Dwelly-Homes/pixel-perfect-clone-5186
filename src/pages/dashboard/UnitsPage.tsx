@@ -24,7 +24,6 @@ import { api, getApiError } from "@/lib/api";
 import { transformUnit } from "@/lib/propertyTransform";
 import type { Unit } from "@/data/properties";
 import { UNIT_TYPE_OPTIONS } from "@/data/properties";
-import { generateMockUnits } from "@/data/mockUnits";
 
 // ─── blank row for inline add/edit ─────────────────────────────────────────
 interface UnitDraft {
@@ -389,18 +388,13 @@ export default function UnitsPage() {
     },
   });
 
-  // ── Fetch units (falls back to mock data when backend endpoint isn't ready) ──
+  // ── Fetch units ────────────────────────────────────────────────────────────
   const { data: unitsRaw = [], isLoading: loadingUnits } = useQuery({
     queryKey: ["propertyUnits", propertyId],
     enabled: !!propertyId,
     queryFn: async () => {
-      try {
-        const { data } = await api.get(`/properties/${propertyId}/units`);
-        const list = data.data || [];
-        return list.length > 0 ? list : generateMockUnits(propertyId!);
-      } catch {
-        return generateMockUnits(propertyId!);
-      }
+      const { data } = await api.get(`/properties/${propertyId}/units`);
+      return data.data || [];
     },
   });
 
