@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Plus, Trash2, Pencil, Check, X, Layers, Building2,
-  ChevronDown, ChevronUp, Wand2,
+  ChevronDown, ChevronUp, Wand2, UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ import { api, getApiError } from "@/lib/api";
 import { transformUnit } from "@/lib/propertyTransform";
 import type { Unit } from "@/data/properties";
 import { UNIT_TYPE_OPTIONS } from "@/data/properties";
+import { OnboardTenantModal } from "@/components/dashboard/OnboardTenantModal";
 
 // ─── blank row for inline add/edit ─────────────────────────────────────────
 interface UnitDraft {
@@ -377,6 +378,7 @@ export default function UnitsPage() {
   const [editingRow, setEditingRow] = useState<UnitDraft | null>(null);
   const [showBulk, setShowBulk] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [onboardUnit, setOnboardUnit] = useState<{ unitId: string } | null>(null);
 
   // ── Fetch property summary ─────────────────────────────────────────────
   const { data: propertyRaw } = useQuery({
@@ -654,6 +656,15 @@ export default function UnitsPage() {
                               {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                             </button>
                           )}
+                          {unit.status === "vacant" && (
+                            <button
+                              className="h-7 w-7 rounded-md hover:bg-secondary/10 flex items-center justify-center text-muted-foreground hover:text-secondary"
+                              onClick={() => setOnboardUnit({ unitId: unit.id })}
+                              title="Onboard Tenant"
+                            >
+                              <UserPlus className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           <button
                             className="h-7 w-7 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground"
                             onClick={() => { setAddingRow(null); setEditingRow(draftFromUnit(unit)); }}
@@ -701,6 +712,20 @@ export default function UnitsPage() {
         onGenerate={handleBulkGenerate}
         generating={bulkCreate.isPending}
       />
+
+      {/* Onboard tenant modal (pre-selected unit) */}
+      {onboardUnit && propertyRaw && (
+        <OnboardTenantModal
+          open={!!onboardUnit}
+          onClose={() => setOnboardUnit(null)}
+          property={{
+            _id: propertyId!,
+            title: propertyRaw.title,
+            monthlyRent: propertyRaw.monthlyRent,
+          }}
+          preselectedUnitId={onboardUnit.unitId}
+        />
+      )}
     </div>
   );
 }

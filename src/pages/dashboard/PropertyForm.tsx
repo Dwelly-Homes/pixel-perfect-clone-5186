@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Save, Upload, X, Star, Trash2, MapPin, LayoutGrid } from "lucide-react";
+import { ArrowLeft, Save, Upload, X, Star, Trash2, MapPin, LayoutGrid, Plus, Building2 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { useCounties } from "@/hooks/useCounties";
 import { toast } from "sonner";
 import { api, getApiError } from "@/lib/api";
+import { UNIT_TYPE_OPTIONS } from "@/data/properties";
 
 // Fix leaflet default marker icon (broken with webpack/vite bundlers)
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -73,6 +74,24 @@ interface ImageItem {
   isExisting?: boolean;
 }
 
+interface UnitRow {
+  id: string;          // local key only
+  unitNumber: string;  // free text: "1a", "101", "7K", etc.
+  floorNumber: string;
+  unitType: string;
+  monthlyRent: string;
+  serviceCharge: string;
+}
+
+const emptyUnitRow = (): UnitRow => ({
+  id: crypto.randomUUID(),
+  unitNumber: "",
+  floorNumber: "",
+  unitType: "",
+  monthlyRent: "",
+  serviceCharge: "",
+});
+
 // Map click handler component
 function LocationPicker({
   onSelect,
@@ -107,6 +126,9 @@ export default function PropertyForm() {
 
   // Images
   const [images, setImages] = useState<ImageItem[]>([]);
+
+  // Units (new-property flow only)
+  const [unitRows, setUnitRows] = useState<UnitRow[]>([]);
 
   // Map / location
   const [lat, setLat] = useState<number | null>(null);
@@ -227,10 +249,17 @@ export default function PropertyForm() {
     },
   });
 
+  const bulkUnitsMutation = useMutation({
+    mutationFn: ({ propertyId, units }: { propertyId: string; units: Record<string, unknown>[] }) =>
+      api.post(`/properties/${propertyId}/units/bulk`, { units }),
+  });
+
   const createMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.post("/properties", body),
     onSuccess: async (res) => {
       const propertyId = res.data?.data?._id;
+
+      // Upload images
       const newFiles = images.filter((i) => i.file).map((i) => i.file!);
       if (propertyId && newFiles.length > 0) {
         try {
@@ -239,7 +268,32 @@ export default function PropertyForm() {
           toast.warning("Property created but some images failed to upload.");
         }
       }
-      toast.success("Property created! Now add units to this property.");
+
+      // Bulk-create units if any were filled in
+      const validUnits = unitRows.filter(
+        (u) => u.unitNumber.trim() && u.unitType && u.monthlyRent && Number(u.monthlyRent) > 0
+      );
+      if (propertyId && validUnits.length > 0) {
+        try {
+          await bulkUnitsMutation.mutateAsync({
+            propertyId,
+            units: validUnits.map((u) => ({
+              unitNumber: u.unitNumber.trim(),
+              floorNumber: u.floorNumber !== "" ? Number(u.floorNumber) : undefined,
+              unitType: u.unitType,
+              monthlyRent: Number(u.monthlyRent),
+              serviceCharge: u.serviceCharge !== "" ? Number(u.serviceCharge) : 0,
+              status: "vacant",
+            })),
+          });
+          toast.success(`Property created with ${validUnits.length} unit${validUnits.length > 1 ? "s" : ""}!`);
+        } catch {
+          toast.warning("Property created but some units failed to save.");
+        }
+      } else {
+        toast.success("Property created! Add units to this property.");
+      }
+
       if (propertyId) {
         navigate(`/dashboard/properties/${propertyId}/units`);
       } else {
@@ -295,7 +349,7 @@ export default function PropertyForm() {
     }
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending || uploadImagesMutation.isPending;
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || uploadImagesMutation.isPending || bulkUnitsMutation.isPending;
 
   // Default map center — Nairobi, Kenya
   const mapCenter: [number, number] =
@@ -672,6 +726,153 @@ export default function PropertyForm() {
             )}
           </CardContent>
         </Card>
+
+        {/* Units — new properties only */}
+        {!isEditing && (
+          <Card className="shadow-sm">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-heading flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-muted-foreground" />
+                    Units
+                    {unitRows.length > 0 && (
+                      <span className="text-sm font-normal text-muted-foreground ml-1">
+                        ({unitRows.length})
+                      </span>
+                    )}
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Optional — add individual rental units now, or later from the Units page.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setUnitRows((prev) => [...prev, emptyUnitRow()])}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Unit
+                </Button>
+              </div>
+            </CardHeader>
+            {unitRows.length > 0 && (
+              <CardContent className="space-y-2 pt-0">
+                {/* Column headers */}
+                <div className="grid grid-cols-[1fr_70px_1fr_110px_100px_32px] gap-2 px-1 pb-1">
+                  <span className="text-xs font-medium text-muted-foreground">Unit Name / No.</span>
+                  <span className="text-xs font-medium text-muted-foreground">Floor</span>
+                  <span className="text-xs font-medium text-muted-foreground">Type</span>
+                  <span className="text-xs font-medium text-muted-foreground">Rent (KES)</span>
+                  <span className="text-xs font-medium text-muted-foreground">Svc. Charge</span>
+                  <span />
+                </div>
+
+                <div className="space-y-2">
+                  {unitRows.map((row, idx) => (
+                    <div
+                      key={row.id}
+                      className="grid grid-cols-[1fr_70px_1fr_110px_100px_32px] gap-2 items-center"
+                    >
+                      {/* Unit number — free text */}
+                      <Input
+                        value={row.unitNumber}
+                        onChange={(e) =>
+                          setUnitRows((prev) =>
+                            prev.map((r) => r.id === row.id ? { ...r, unitNumber: e.target.value } : r)
+                          )
+                        }
+                        placeholder="e.g. 1A, 101, 7K"
+                        className="h-8 text-sm"
+                        maxLength={20}
+                      />
+
+                      {/* Floor */}
+                      <Input
+                        type="number"
+                        value={row.floorNumber}
+                        onChange={(e) =>
+                          setUnitRows((prev) =>
+                            prev.map((r) => r.id === row.id ? { ...r, floorNumber: e.target.value } : r)
+                          )
+                        }
+                        placeholder="—"
+                        className="h-8 text-sm"
+                        min={0}
+                      />
+
+                      {/* Type */}
+                      <Select
+                        value={row.unitType}
+                        onValueChange={(v) =>
+                          setUnitRows((prev) =>
+                            prev.map((r) => r.id === row.id ? { ...r, unitType: v } : r)
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {UNIT_TYPE_OPTIONS.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {/* Rent */}
+                      <Input
+                        type="number"
+                        value={row.monthlyRent}
+                        onChange={(e) =>
+                          setUnitRows((prev) =>
+                            prev.map((r) => r.id === row.id ? { ...r, monthlyRent: e.target.value } : r)
+                          )
+                        }
+                        placeholder="0"
+                        className="h-8 text-sm"
+                        min={0}
+                        step={500}
+                      />
+
+                      {/* Service charge */}
+                      <Input
+                        type="number"
+                        value={row.serviceCharge}
+                        onChange={(e) =>
+                          setUnitRows((prev) =>
+                            prev.map((r) => r.id === row.id ? { ...r, serviceCharge: e.target.value } : r)
+                          )
+                        }
+                        placeholder="0"
+                        className="h-8 text-sm"
+                        min={0}
+                        step={500}
+                      />
+
+                      {/* Remove */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setUnitRows((prev) => prev.filter((r) => r.id !== row.id))
+                        }
+                        className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        title="Remove row"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-xs text-muted-foreground pt-1">
+                  Unit names are flexible — use any convention that fits your property (101, A1, 7K…).
+                  Rows with an empty name or type will be skipped.
+                </p>
+              </CardContent>
+            )}
+          </Card>
+        )}
 
         <Separator />
 

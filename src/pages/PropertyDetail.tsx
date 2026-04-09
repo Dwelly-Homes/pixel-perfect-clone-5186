@@ -346,7 +346,7 @@ export default function PropertyDetail() {
                             KES {unit.price.toLocaleString()}
                             <span className="text-xs font-normal text-muted-foreground font-body">/mo</span>
                           </span>
-                          {unit.status === "vacant" && (
+                          {unit.status === "vacant" && !isOwner && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -358,6 +358,14 @@ export default function PropertyDetail() {
                             >
                               <Send className="h-3 w-3 mr-1" /> Inquire
                             </Button>
+                          )}
+                          {isOwner && (
+                            <Link
+                              to={`/dashboard/properties/${rawProperty._id}/units`}
+                              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-secondary transition-colors"
+                            >
+                              <Pencil className="h-3 w-3" /> Manage
+                            </Link>
                           )}
                         </div>
                       </div>
