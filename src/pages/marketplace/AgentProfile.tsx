@@ -122,34 +122,26 @@ export default function AgentProfile() {
   const [contactOpen, setContactOpen] = useState(false);
   const [ratingOpen, setRatingOpen] = useState(false);
 
-  const { data: agentData, isLoading: agentLoading, isError: agentError } = useQuery({
-    queryKey: ["agentProfile", slug],
+  // Use the public marketplace endpoint with agentSlug — no auth needed.
+  // Fetching listings also gives us the populated tenantId object (agent info).
+  const { data: listingsData, isLoading: listingsLoading, isError: agentError } = useQuery({
+    queryKey: ["agentListings", slug],
     queryFn: async () => {
-      try {
-        const { data } = await api.get(`/tenants/slug/${slug}`, { _silent: true });
-        return data?.data ?? data;
-      } catch {
-        // Fallback: search by slug query param
-        const { data } = await api.get(`/tenants?slug=${slug}&accountType=estate_agent&limit=1`, { _silent: true });
-        const items: any[] = data?.data ?? [];
-        if (!items[0]) throw new Error("Agent not found");
-        return items[0];
-      }
+      const { data } = await api.get(`/properties/marketplace?agentSlug=${slug}&limit=8&status=available`);
+      return data;
     },
     enabled: !!slug,
     retry: 1,
   });
 
+  // Extract the agent/tenant profile from the first property's populated tenantId field
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const firstProperty: any = listingsData?.data?.[0];
+  const agentData = firstProperty?.tenantId && typeof firstProperty.tenantId === "object"
+    ? firstProperty.tenantId
+    : null;
+  const agentLoading = listingsLoading;
   const tenantId = agentData?._id;
-
-  const { data: listingsData, isLoading: listingsLoading } = useQuery({
-    queryKey: ["agentListings", tenantId],
-    queryFn: async () => {
-      const { data } = await api.get(`/properties/marketplace?tenantId=${tenantId}&limit=8&status=available`, { _silent: true });
-      return data;
-    },
-    enabled: !!tenantId,
-  });
 
   const { data: reviewsData, isLoading: reviewsLoading } = useQuery({
     queryKey: ["agentReviews", tenantId],
@@ -168,12 +160,14 @@ export default function AgentProfile() {
     );
   }
 
-  if (agentError || !agentData) {
+  // If the request errored or returned no properties (agent may have no active listings),
+  // we cannot extract agent info from the marketplace endpoint alone.
+  if (agentError || (!agentLoading && !agentData)) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 text-center px-4">
         <AlertCircle className="h-10 w-10 text-muted-foreground" />
-        <h2 className="text-lg font-heading font-semibold">Agent not found</h2>
-        <p className="text-sm text-muted-foreground">This agent profile does not exist or has been removed.</p>
+        <h2 className="text-lg font-heading font-semibold">Agent profile unavailable</h2>
+        <p className="text-sm text-muted-foreground">This agent has no active listings or the profile could not be found.</p>
         <Button variant="outline" onClick={() => navigate(-1)}>Go Back</Button>
       </div>
     );
