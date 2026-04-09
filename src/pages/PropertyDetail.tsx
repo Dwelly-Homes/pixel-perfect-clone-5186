@@ -296,7 +296,7 @@ export default function PropertyDetail() {
             {/* Available Units */}
             {units.length > 0 && (
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
                   <h2 className="font-heading text-lg font-semibold text-foreground flex items-center gap-2">
                     <Building2 className="h-5 w-5 text-muted-foreground" />
                     Available Units
@@ -324,17 +324,18 @@ export default function PropertyDetail() {
                   {units
                     .filter((u) => unitStatusFilter === "all" || u.status === unitStatusFilter)
                     .map((unit) => (
-                      <div key={unit.id} className="flex items-center justify-between px-4 py-3 bg-card hover:bg-muted/30 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className="text-sm font-medium font-body w-14">{unit.unitNumber}</div>
-                          <div className="text-sm text-muted-foreground font-body">
-                            {unit.floorNumber !== undefined ? `Floor ${unit.floorNumber}` : "—"}
+                      <div key={unit.id} className="px-4 py-3 bg-card hover:bg-muted/30 transition-colors">
+                        {/* Top row: unit number + status badge */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-semibold font-body shrink-0">{unit.unitNumber}</span>
+                            <Badge variant="outline" className="font-body text-xs shrink-0">{unit.typeLabel}</Badge>
+                            {unit.floorNumber !== undefined && (
+                              <span className="text-xs text-muted-foreground font-body truncate">Floor {unit.floorNumber}</span>
+                            )}
                           </div>
-                          <Badge variant="outline" className="font-body text-xs">{unit.typeLabel}</Badge>
-                        </div>
-                        <div className="flex items-center gap-3">
                           <span
-                            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${
                               unit.status === "vacant"
                                 ? "bg-green-100 text-green-700"
                                 : "bg-gray-100 text-gray-600"
@@ -342,31 +343,36 @@ export default function PropertyDetail() {
                           >
                             {unit.status === "vacant" ? "Vacant" : "Occupied"}
                           </span>
-                          <span className="font-heading font-bold text-secondary text-sm whitespace-nowrap">
+                        </div>
+                        {/* Bottom row: price + action */}
+                        <div className="flex items-center justify-between gap-2 mt-2">
+                          <span className="font-heading font-bold text-secondary text-sm">
                             KES {unit.price.toLocaleString()}
                             <span className="text-xs font-normal text-muted-foreground font-body">/mo</span>
                           </span>
-                          {unit.status === "vacant" && !isOwner && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs border-secondary text-secondary hover:bg-secondary hover:text-secondary-foreground"
-                              onClick={() => {
-                                setSelectedUnitId(unit.id);
-                                setInquiryOpen(true);
-                              }}
-                            >
-                              <Send className="h-3 w-3 mr-1" /> Inquire
-                            </Button>
-                          )}
-                          {isOwner && (
-                            <Link
-                              to={`/dashboard/properties/${rawProperty._id}/units`}
-                              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-secondary transition-colors"
-                            >
-                              <Pencil className="h-3 w-3" /> Manage
-                            </Link>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {unit.status === "vacant" && !isOwner && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-secondary text-secondary hover:bg-secondary hover:text-secondary-foreground"
+                                onClick={() => {
+                                  setSelectedUnitId(unit.id);
+                                  setInquiryOpen(true);
+                                }}
+                              >
+                                <Send className="h-3 w-3 mr-1" /> Inquire
+                              </Button>
+                            )}
+                            {isOwner && (
+                              <Link
+                                to={`/dashboard/properties/${rawProperty._id}/units`}
+                                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-secondary transition-colors"
+                              >
+                                <Pencil className="h-3 w-3" /> Manage
+                              </Link>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
