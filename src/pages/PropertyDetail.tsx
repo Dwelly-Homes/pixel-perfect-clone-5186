@@ -282,11 +282,11 @@ export default function PropertyDetail() {
             {property.amenities.length > 0 && (
               <div>
                 <h2 className="font-heading text-lg font-semibold text-foreground mb-3">Features & Amenities</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <div className="flex flex-wrap gap-x-6 gap-y-3">
                   {property.amenities.map((a) => (
                     <div key={a} className="flex items-center gap-2 text-sm font-body text-foreground">
                       <Check className="h-4 w-4 text-success shrink-0" />
-                      {a}
+                      <span>{a}</span>
                     </div>
                   ))}
                 </div>

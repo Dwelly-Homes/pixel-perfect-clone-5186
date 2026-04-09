@@ -41,7 +41,15 @@ export default function DashboardHome() {
   const { data: inquiriesData, isLoading: inquiriesLoading } = useQuery({
     queryKey: ["dashboardInquiries"],
     queryFn: async () => {
-      const { data } = await api.get("/inquiries?limit=5");
+      const { data } = await api.get("/inquiries?limit=5&sort=createdAt&order=desc");
+      return data;
+    },
+  });
+
+  const { data: inquiriesCountData } = useQuery({
+    queryKey: ["dashboardInquiriesCount"],
+    queryFn: async () => {
+      const { data } = await api.get("/inquiries?limit=1&status=new");
       return data;
     },
   });
@@ -51,7 +59,8 @@ export default function DashboardHome() {
   const allProperties: any[] = Array.isArray(allPropsData?.data) ? allPropsData.data : [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recentInquiries: any[] = Array.isArray(inquiriesData?.data) ? inquiriesData.data : [];
-  const newInquiries = recentInquiries.filter((i) => i.status === "new").length;
+  const totalInquiries: number = inquiriesData?.meta?.total ?? recentInquiries.length;
+  const newInquiries: number = inquiriesCountData?.meta?.total ?? recentInquiries.filter((i) => i.status === "new").length;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const properties: any[] = Array.isArray(propertiesData?.data) ? propertiesData.data : [];
 
@@ -76,7 +85,7 @@ export default function DashboardHome() {
     },
     {
       label: "Active Inquiries",
-      value: inquiriesLoading ? null : recentInquiries.length,
+      value: inquiriesLoading ? null : totalInquiries,
       icon: MessageSquare,
       trend: `${newInquiries} new`,
     },

@@ -64,8 +64,15 @@ export function DashboardLayout() {
             </div>
             <div className="flex items-center gap-2">
               <NotificationBell />
-              <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
-                {initials}
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold shrink-0">
+                  {initials}
+                </div>
+                {user?.fullName && (
+                  <span className="text-sm font-medium hidden sm:block max-w-[140px] truncate">
+                    {user.fullName}
+                  </span>
+                )}
               </div>
             </div>
           </header>
