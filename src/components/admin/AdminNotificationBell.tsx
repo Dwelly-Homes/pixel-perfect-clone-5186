@@ -31,41 +31,49 @@ interface PreferencesResponse {
 }
 
 export function AdminNotificationBell() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [showPrefs, setShowPrefs] = useState(false);
   const lastSeenAt = useRef<string>(new Date().toISOString());
 
+  const ready = isAuthenticated && !isLoading;
+
   const { data: notifData } = useQuery({
     queryKey: ["adminNotifications", "bell"],
     queryFn: async () => {
-      const { data } = await api.get<NotificationsResponse>("/notifications?limit=10");
+      const { data } = await api.get<NotificationsResponse>("/notifications?limit=10", { _silent: true });
       return data;
     },
-    enabled: isAuthenticated,
-    refetchInterval: 30000,
+    enabled: ready,
+    refetchInterval: 60000,
+    retry: false,
+    staleTime: 30000,
   });
 
   const { data: newData } = useQuery({
     queryKey: ["adminNotifications", "poll"],
     queryFn: async () => {
-      const { data } = await api.get<NotificationsResponse>(`/notifications?since=${lastSeenAt.current}&limit=5`);
+      const { data } = await api.get<NotificationsResponse>(`/notifications?since=${lastSeenAt.current}&limit=5`, { _silent: true });
       return data;
     },
-    enabled: isAuthenticated,
-    refetchInterval: 30000,
-    refetchIntervalInBackground: true,
+    enabled: ready,
+    refetchInterval: 60000,
+    refetchIntervalInBackground: false,
+    retry: false,
+    staleTime: 30000,
   });
 
   const { data: prefsData } = useQuery({
     queryKey: ["adminNotificationPreferences"],
     queryFn: async () => {
-      const { data } = await api.get<PreferencesResponse>("/notifications/preferences");
+      const { data } = await api.get<PreferencesResponse>("/notifications/preferences", { _silent: true });
       return data?.data;
     },
-    enabled: isAuthenticated,
+    enabled: ready,
+    retry: false,
+    staleTime: 120000,
   });
 
   const prefsMutation = useMutation({
@@ -179,11 +187,14 @@ export function AdminNotificationBell() {
                 </div>
               ) : (
                 notifications.map((n) => (
-                  <button
+                  <div
                     key={n._id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleNotifClick(n)}
+                    onKeyDown={(e) => e.key === "Enter" && handleNotifClick(n)}
                     className={cn(
-                      "w-full text-left px-4 py-3 border-b last:border-0 hover:bg-muted/50 transition-colors flex gap-3 items-start",
+                      "w-full text-left px-4 py-3 border-b last:border-0 hover:bg-muted/50 transition-colors flex gap-3 items-start cursor-pointer",
                       !n.isRead && "bg-secondary/10"
                     )}
                   >
@@ -206,7 +217,7 @@ export function AdminNotificationBell() {
                         <Check className="h-3.5 w-3.5" />
                       </button>
                     )}
-                  </button>
+                  </div>
                 ))
               )}
             </ScrollArea>

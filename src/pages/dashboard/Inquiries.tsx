@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, MessageSquare, Phone, Mail, Home, Clock, CheckCircle, X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Search, MessageSquare, Phone, Mail, Home, Clock, CheckCircle, X, ChevronLeft, ChevronRight, Loader2, LayoutGrid } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -168,6 +168,9 @@ export default function Inquiries() {
                     </div>
                     <p className="text-xs text-muted-foreground truncate">
                       {typeof inq.propertyId === "object" ? inq.propertyId?.title : "Property"}
+                      {inq.unitId && typeof inq.unitId === "object" && (
+                        <span className="text-secondary font-medium"> · Unit {inq.unitId.unitNumber}</span>
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                       <Clock className="h-3 w-3" />{timeAgo(inq.createdAt)}
@@ -221,13 +224,22 @@ export default function Inquiries() {
 
             <div className="flex items-center gap-2 p-3 bg-muted/40 rounded-lg">
               <Home className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Property</p>
                 <p className="text-sm font-medium">
                   {typeof selected.propertyId === "object" ? selected.propertyId?.title : "Property"}
                 </p>
+                {selected.unitId && typeof selected.unitId === "object" && (
+                  <p className="text-xs text-secondary font-medium mt-0.5 flex items-center gap-1">
+                    <LayoutGrid className="h-3 w-3" />
+                    Unit {selected.unitId.unitNumber}
+                    {selected.unitId.floorNumber !== undefined && (
+                      <span className="text-muted-foreground font-normal">· Floor {selected.unitId.floorNumber}</span>
+                    )}
+                  </p>
+                )}
               </div>
-              <Badge variant="outline" className="ml-auto text-xs">
+              <Badge variant="outline" className="ml-auto text-xs shrink-0">
                 {typeLabel[selected.inquiryType] || selected.inquiryType}
               </Badge>
             </div>

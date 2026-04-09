@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { UserPlus, Loader2, Search, X, CheckCircle2, Users, UserCheck } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { UserPlus, Loader2, Search, X, CheckCircle2, Users, UserCheck, LayoutGrid } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -9,6 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { api, getApiError } from "@/lib/api";
@@ -17,6 +20,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   property: { _id: string; title: string; monthlyRent: number };
+  preselectedUnitId?: string;
 }
 
 interface SearcherResult {
@@ -26,12 +30,21 @@ interface SearcherResult {
   email: string;
 }
 
-export function OnboardTenantModal({ open, onClose, property }: Props) {
+interface UnitOption {
+  _id: string;
+  unitNumber: string;
+  floorNumber?: number;
+  unitType: string;
+  monthlyRent: number;
+  status: "vacant" | "occupied";
+}
+
+export function OnboardTenantModal({ open, onClose, property, preselectedUnitId }: Props) {
   const queryClient = useQueryClient();
 
-  // Mode: "search" = find existing user, "manual" = fill details manually
   const [mode, setMode] = useState<"search" | "manual">("search");
   const [selectedUser, setSelectedUser] = useState<SearcherResult | null>(null);
+  const [selectedUnitId, setSelectedUnitId] = useState<string>(preselectedUnitId ?? "none");
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -49,6 +62,18 @@ export function OnboardTenantModal({ open, onClose, property }: Props) {
   const [leaseEnd, setLeaseEnd] = useState("");
   const [notes, setNotes] = useState("");
 
+  // Fetch units for this property
+  const { data: unitsRaw = [] } = useQuery<UnitOption[]>({
+    queryKey: ["propertyUnits", property._id],
+    enabled: open && !!property._id,
+    queryFn: async () => {
+      const { data } = await api.get(`/properties/${property._id}/units`);
+      return data?.data ?? [];
+    },
+  });
+
+  const vacantUnits = unitsRaw.filter((u) => u.status === "vacant");
+
   // Reset on open
   useEffect(() => {
     if (open) {
@@ -61,8 +86,25 @@ export function OnboardTenantModal({ open, onClose, property }: Props) {
       setDeposit(String(property.monthlyRent));
       setLeaseStart(new Date().toISOString().split("T")[0]);
       setLeaseEnd(""); setNotes("");
+      setSelectedUnitId(preselectedUnitId ?? "none");
     }
-  }, [open, property.monthlyRent]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Auto-populate rent when unit is selected
+  useEffect(() => {
+    if (selectedUnitId && selectedUnitId !== "none") {
+      const unit = unitsRaw.find((u) => u._id === selectedUnitId);
+      if (unit) {
+        setRent(String(unit.monthlyRent));
+        setDeposit(String(unit.monthlyRent));
+      }
+    } else {
+      setRent(String(property.monthlyRent));
+      setDeposit(String(property.monthlyRent));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUnitId]);
 
   // Debounced search
   useEffect(() => {
@@ -95,10 +137,13 @@ export function OnboardTenantModal({ open, onClose, property }: Props) {
     setName(""); setPhone(""); setEmail("");
   }
 
+  const selectedUnit = selectedUnitId !== "none" ? unitsRaw.find((u) => u._id === selectedUnitId) : null;
+
   const mutation = useMutation({
     mutationFn: () =>
       api.post("/leases", {
         propertyId: property._id,
+        ...(selectedUnitId !== "none" ? { unitId: selectedUnitId } : {}),
         occupantName: name,
         occupantPhone: phone.startsWith("+") ? phone : `+254${phone.replace(/^0/, "")}`,
         occupantEmail: email || undefined,
@@ -111,7 +156,8 @@ export function OnboardTenantModal({ open, onClose, property }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["myProperties"] });
       queryClient.invalidateQueries({ queryKey: ["leases"] });
-      toast.success(`Tenant onboarded for ${property.title}`);
+      queryClient.invalidateQueries({ queryKey: ["propertyUnits", property._id] });
+      toast.success(`Tenant onboarded for ${property.title}${selectedUnit ? ` · Unit ${selectedUnit.unitNumber}` : ""}`);
       onClose();
     },
     onError: (err) => toast.error(getApiError(err)),
@@ -133,7 +179,11 @@ export function OnboardTenantModal({ open, onClose, property }: Props) {
             <UserPlus className="h-5 w-5 text-secondary" /> Onboard Tenant
           </DialogTitle>
           <DialogDescription className="font-body">
-            {property.title} — this will mark the property as <strong>Occupied</strong>.
+            {property.title}
+            {selectedUnit
+              ? <> · <span className="font-medium text-foreground">Unit {selectedUnit.unitNumber}</span></>
+              : " — this will mark the property as occupied."
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -269,12 +319,11 @@ export function OnboardTenantModal({ open, onClose, property }: Props) {
             </div>
           )}
 
-          {/* ── Lease details (always shown once a tenant is identified) ── */}
+          {/* ── Lease details (always shown once tenant is identified) ── */}
           {(mode === "manual" || selectedUser) && (
             <>
               {selectedUser && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                  {/* show read-only fields for selected user */}
                   <div className="sm:col-span-2 space-y-1.5">
                     <Label className="text-xs">Full Name</Label>
                     <Input value={name} disabled className="bg-muted" />
@@ -289,6 +338,45 @@ export function OnboardTenantModal({ open, onClose, property }: Props) {
                   </div>
                 </div>
               )}
+
+              {/* ── Unit selector ── */}
+              <div className="space-y-1.5 border-t pt-4">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <LayoutGrid className="h-3.5 w-3.5 text-secondary" /> Assign to Unit
+                </Label>
+                {vacantUnits.length > 0 ? (
+                  <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a unit (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No specific unit</SelectItem>
+                      {vacantUnits.map((u) => (
+                        <SelectItem key={u._id} value={u._id}>
+                          Unit {u.unitNumber}
+                          {u.floorNumber !== undefined ? ` · Floor ${u.floorNumber}` : ""}
+                          {" · "}KES {u.monthlyRent.toLocaleString()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2 px-3 rounded-md border bg-muted/40">
+                    {unitsRaw.length > 0
+                      ? "All units are currently occupied."
+                      : "No units defined — onboarding at property level."}
+                  </div>
+                )}
+                {selectedUnit && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="outline" className="text-xs font-normal">
+                      Unit {selectedUnit.unitNumber}
+                      {selectedUnit.floorNumber !== undefined ? ` · Floor ${selectedUnit.floorNumber}` : ""}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">Rent auto-filled from unit</span>
+                  </div>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t pt-4">
                 <div className="space-y-1.5">

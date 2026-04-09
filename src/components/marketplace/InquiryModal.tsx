@@ -1,12 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { api, getApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+
+interface UnitOption {
+  id: string;
+  label: string;  // e.g. "A01 · 1 Bedroom · KES 25,000"
+  status: "vacant" | "occupied";
+}
 
 interface InquiryModalProps {
   open: boolean;
@@ -14,16 +23,37 @@ interface InquiryModalProps {
   propertyId: string;
   propertyTitle: string;
   agentName: string;
+  /** When provided, shows a unit selector dropdown */
+  units?: UnitOption[];
+  /** Pre-select a specific unit (e.g. when clicking "Inquire" on a unit row) */
+  preselectedUnitId?: string;
 }
 
-export function InquiryModal({ open, onClose, propertyId, propertyTitle, agentName }: InquiryModalProps) {
+export function InquiryModal({
+  open,
+  onClose,
+  propertyId,
+  propertyTitle,
+  agentName,
+  units,
+  preselectedUnitId,
+}: InquiryModalProps) {
   const { user, isAuthenticated } = useAuth();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState(`I am interested in this property: ${propertyTitle}`);
+  const [selectedUnitId, setSelectedUnitId] = useState<string>(preselectedUnitId ?? "none");
   const [submitting, setSubmitting] = useState(false);
+
+  // Sync preselection when modal opens or prop changes
+  useEffect(() => {
+    setSelectedUnitId(preselectedUnitId ?? "none");
+  }, [preselectedUnitId, open]);
+
+  const hasUnits = units && units.length > 0;
+  const vacantUnits = units?.filter((u) => u.status === "vacant") ?? [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +68,7 @@ export function InquiryModal({ open, onClose, propertyId, propertyTitle, agentNa
     try {
       await api.post("/inquiries", {
         propertyId,
+        ...(selectedUnitId && selectedUnitId !== "none" ? { unitId: selectedUnitId } : {}),
         inquiryType: "general",
         senderName,
         senderPhone,
@@ -97,6 +128,27 @@ export function InquiryModal({ open, onClose, propertyId, propertyTitle, agentNa
               </div>
             </>
           )}
+
+          {hasUnits && (
+            <div>
+              <Label className="font-body">Specific Unit (optional)</Label>
+              <Select
+                value={selectedUnitId}
+                onValueChange={setSelectedUnitId}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Entire property (any unit)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Entire property (any unit)</SelectItem>
+                  {vacantUnits.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
             <Label className="font-body">Message</Label>
             <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} className="mt-1" />

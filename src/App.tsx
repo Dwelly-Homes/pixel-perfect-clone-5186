@@ -20,6 +20,7 @@ import DashboardHome from "./pages/dashboard/DashboardHome.tsx";
 import PropertyList from "./pages/dashboard/PropertyList.tsx";
 import PropertyForm from "./pages/dashboard/PropertyForm.tsx";
 import PropertyMedia from "./pages/dashboard/PropertyMedia.tsx";
+import UnitsPage from "./pages/dashboard/UnitsPage.tsx";
 import TeamMembers from "./pages/dashboard/TeamMembers.tsx";
 import InviteMember from "./pages/dashboard/InviteMember.tsx";
 import Inquiries from "./pages/dashboard/Inquiries.tsx";
@@ -106,6 +107,7 @@ const App = () => (
             <Route path="properties" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><PropertyList /></RoleGuard>} />
             <Route path="properties/new" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><PropertyForm /></RoleGuard>} />
             <Route path="properties/:id/edit" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><PropertyForm /></RoleGuard>} />
+            <Route path="properties/:id/units" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><UnitsPage /></RoleGuard>} />
             <Route path="properties/:id/media" element={<RoleGuard roles={["tenant_admin", "agent_staff"]}><PropertyMedia /></RoleGuard>} />
             <Route path="team" element={<RoleGuard roles={["tenant_admin"]}><TeamMembers /></RoleGuard>} />
             <Route path="team/invite" element={<RoleGuard roles={["tenant_admin"]}><InviteMember /></RoleGuard>} />

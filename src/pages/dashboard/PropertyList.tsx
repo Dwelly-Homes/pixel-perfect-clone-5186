@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Plus, Search, MoreHorizontal, Pencil, Trash2, Eye, ArrowUpDown, ChevronLeft, ChevronRight, Globe, EyeOff, UserPlus,
+  Plus, Search, MoreHorizontal, Pencil, Trash2, Eye, ArrowUpDown, ChevronLeft, ChevronRight, Globe, EyeOff, UserPlus, LayoutGrid,
 } from "lucide-react";
 import { OnboardTenantModal } from "@/components/dashboard/OnboardTenantModal";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -149,6 +149,7 @@ export default function PropertyList() {
             <TableRow>
               <TableHead className="w-[300px]">Property</TableHead>
               <TableHead>Location</TableHead>
+              <TableHead>Units</TableHead>
               <TableHead>
                 <button
                   onClick={() => toggleSort("monthlyRent")}
@@ -173,14 +174,14 @@ export default function PropertyList() {
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={7}>
                     <div className="h-12 bg-muted rounded animate-pulse" />
                   </TableCell>
                 </TableRow>
               ))
             ) : rawProperties.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                   No properties found.{" "}
                   <Link to="/dashboard/properties/new" className="text-secondary hover:underline">
                     Add your first property
@@ -195,6 +196,9 @@ export default function PropertyList() {
                   || rawProp.images?.[0]?.url
                   || PLACEHOLDER_IMAGE;
                 const cfg = statusConfig[rawProp.status] ?? { label: rawProp.status, variant: "outline" as const };
+                const hasUnits = typeof rawProp.totalUnits === "number" && rawProp.totalUnits > 0;
+                const availableUnits: number = rawProp.availableUnits ?? 0;
+                const totalUnits: number = rawProp.totalUnits ?? 0;
                 return (
                   <TableRow key={rawProp._id}>
                     <TableCell>
@@ -206,15 +210,44 @@ export default function PropertyList() {
                         />
                         <div className="min-w-0">
                           <p className="font-medium text-sm truncate">{property.title}</p>
-                          <p className="text-xs text-muted-foreground">{property.type} · {property.bedrooms > 0 ? `${property.bedrooms} bed` : "Studio"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {hasUnits
+                              ? `${totalUnits} unit${totalUnits !== 1 ? "s" : ""} · mixed types`
+                              : `${property.type} · ${property.bedrooms > 0 ? `${property.bedrooms} bed` : "Studio"}`}
+                          </p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
                       {property.location.neighborhood}, {property.location.county}
                     </TableCell>
+                    <TableCell className="text-sm">
+                      {hasUnits ? (
+                        <Link
+                          to={`/dashboard/properties/${rawProp._id}/units`}
+                          className="inline-flex items-center gap-1 text-secondary hover:underline font-medium"
+                        >
+                          <LayoutGrid className="h-3.5 w-3.5" />
+                          {availableUnits} / {totalUnits}
+                        </Link>
+                      ) : (
+                        <Link
+                          to={`/dashboard/properties/${rawProp._id}/units`}
+                          className="text-xs text-muted-foreground hover:text-secondary"
+                        >
+                          + Add units
+                        </Link>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm font-medium">
-                      KES {property.price.toLocaleString()}
+                      {hasUnits && rawProp.startingPrice ? (
+                        <span>
+                          <span className="text-xs text-muted-foreground font-normal">from </span>
+                          KES {Number(rawProp.startingPrice).toLocaleString()}
+                        </span>
+                      ) : (
+                        `KES ${property.price.toLocaleString()}`
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant={cfg.variant}>{cfg.label}</Badge>
@@ -233,13 +266,19 @@ export default function PropertyList() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
-                            <Link to={`/marketplace/${rawProp._id}`}>
+                            <Link to={`/marketplace/${rawProp._id}`} state={{ from: "dashboard" }}>
                               <Eye className="h-4 w-4 mr-2" /> Preview
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
                             <Link to={`/dashboard/properties/${rawProp._id}/edit`}>
                               <Pencil className="h-4 w-4 mr-2" /> Edit
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link to={`/dashboard/properties/${rawProp._id}/units`}>
+                              <LayoutGrid className="h-4 w-4 mr-2 text-secondary" />
+                              <span className="text-secondary font-medium">Manage Units</span>
                             </Link>
                           </DropdownMenuItem>
                           {rawProp.status === "draft" && (
