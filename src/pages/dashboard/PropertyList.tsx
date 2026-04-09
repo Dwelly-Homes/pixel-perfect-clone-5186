@@ -266,7 +266,7 @@ export default function PropertyList() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
-                            <Link to={`/marketplace/${rawProp._id}`}>
+                            <Link to={`/marketplace/${rawProp._id}`} state={{ from: "dashboard" }}>
                               <Eye className="h-4 w-4 mr-2" /> Preview
                             </Link>
                           </DropdownMenuItem>

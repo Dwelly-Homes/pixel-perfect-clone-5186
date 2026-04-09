@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, MapPin, BadgeCheck, Shield, Heart, Share2,
@@ -32,6 +32,7 @@ import { toast } from "sonner";
 
 export default function PropertyDetail() {
   const { id } = useParams();
+  const location = useLocation();
   const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [currentImage, setCurrentImage] = useState(0);
@@ -80,20 +81,9 @@ export default function PropertyDetail() {
     enabled: !!rawProperty?.county,
   });
 
-  const { data: unitsRaw = [] } = useQuery({
-    queryKey: ["propertyUnits", id],
-    enabled: !!id,
-    queryFn: async () => {
-      // Units are embedded in the marketplace property response
-      // If already present on rawProperty, use them; else fetch separately
-      if (rawProperty?.units?.length) return rawProperty.units;
-      const { data } = await api.get(`/properties/${id}/units`);
-      return data.data || [];
-    },
-    enabled: !!id && !!rawProperty,
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const units: Unit[] = (unitsRaw as any[]).map(transformUnit);
+  // Units come embedded in the marketplace response — never call the
+  // auth-protected /units endpoint here (would redirect guests to login).
+  const units: Unit[] = rawProperty?.units ? (rawProperty.units as unknown[]).map(transformUnit) : [];
 
   const publishMutation = useMutation({
     mutationFn: (publish: boolean) =>
@@ -145,8 +135,11 @@ export default function PropertyDetail() {
   const isDraft = rawProperty.status === "draft";
   const isExpired = rawProperty.status === "expired";
 
-  const backLink = isAuthenticated ? "/dashboard/properties" : "/";
-  const backText = isAuthenticated ? "Back to My Properties" : "Back to Properties";
+  // Determine back destination based on where the user actually came from.
+  // PropertyList passes state={{ from: "dashboard" }} on its Preview link.
+  const cameFromDashboard = (location.state as { from?: string } | null)?.from === "dashboard";
+  const backLink = (isOwner || cameFromDashboard) ? "/dashboard/properties" : "/";
+  const backText = (isOwner || cameFromDashboard) ? "My Properties" : "All Properties";
 
   const nextImage = () => setCurrentImage((i) => (i + 1) % property.images.length);
   const prevImage = () => setCurrentImage((i) => (i - 1 + property.images.length) % property.images.length);
@@ -157,7 +150,8 @@ export default function PropertyDetail() {
 
       <div className="container mx-auto px-4 py-6 flex-1">
         <Link to={backLink} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground font-body mb-4">
-          <ArrowLeft className="h-4 w-4" /> {backText}
+          <ArrowLeft className="h-4 w-4" />
+          <span>← {backText}</span>
         </Link>
 
         {isOwner && (
@@ -476,9 +470,9 @@ export default function PropertyDetail() {
                         <Pencil className="h-4 w-4" /> Edit Property
                       </button>
                     </Link>
-                    <Link to="/dashboard/properties" className="block">
+                    <Link to="/dashboard/properties" state={{ from: "dashboard" }} className="block">
                       <button className="w-full flex items-center justify-center gap-2 rounded-md border border-border py-2.5 text-sm font-body font-medium text-muted-foreground hover:bg-muted transition-colors">
-                        ← Back to My Properties
+                        ← My Properties
                       </button>
                     </Link>
                   </div>
