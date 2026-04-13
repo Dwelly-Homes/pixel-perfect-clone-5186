@@ -8,6 +8,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth, type AuthUser } from "@/contexts/AuthContext";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import type { MobileNavItem } from "@/components/MobileBottomNav";
+import { NotificationBell } from "@/components/dashboard/NotificationBell";
 
 function getDashboardLink(user: AuthUser): string {
   if (user.role === "platform_admin") return "/admin";
@@ -132,6 +133,9 @@ export function MarketplaceNav() {
                 <LayoutDashboard className="h-3.5 w-3.5" />
                 {getDashboardLabel(user)}
               </Link>
+
+              {/* Notification bell */}
+              <NotificationBell />
 
               {/* User avatar dropdown */}
               <div className="relative" ref={menuRef}>

@@ -1,5 +1,12 @@
 import axios from "axios";
 
+declare module "axios" {
+  interface AxiosRequestConfig {
+    _silent?: boolean;
+    _retry?: boolean;
+  }
+}
+
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1";
 
 export const api = axios.create({
@@ -31,6 +38,12 @@ api.interceptors.response.use(
   async (err) => {
     const original = err.config;
     if (err.response?.status === 401 && !original._retry) {
+      // Background/silent requests (e.g. notification polling) should never
+      // force a logout — just fail quietly so the UI stays put.
+      if (original._silent) {
+        return Promise.reject(err);
+      }
+
       const refreshToken = localStorage.getItem("refreshToken");
       if (!refreshToken) {
         clearAuth();

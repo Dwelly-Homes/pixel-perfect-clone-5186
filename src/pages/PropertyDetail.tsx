@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, MapPin, BadgeCheck, Shield, Heart, Share2,
   Check, ChevronLeft, ChevronRight, X, Send, Eye, Calendar,
-  Globe, Pencil, AlertTriangle, ExternalLink,
+  Globe, Pencil, AlertTriangle, ExternalLink, Building2, Layers,
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
@@ -25,12 +25,14 @@ import { ShareModal } from "@/components/marketplace/ShareModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import { transformProperty } from "@/lib/propertyTransform";
+import { transformProperty, transformUnit } from "@/lib/propertyTransform";
+import type { Unit } from "@/data/properties";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 export default function PropertyDetail() {
   const { id } = useParams();
+  const location = useLocation();
   const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [currentImage, setCurrentImage] = useState(0);
@@ -39,6 +41,8 @@ export default function PropertyDetail() {
   const [viewingOpen, setViewingOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [favorited, setFavorited] = useState(false);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | undefined>();
+  const [unitStatusFilter, setUnitStatusFilter] = useState<"all" | "vacant" | "occupied">("all");
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -76,6 +80,10 @@ export default function PropertyDetail() {
     },
     enabled: !!rawProperty?.county,
   });
+
+  // Units come embedded in the marketplace response — never call the
+  // auth-protected /units endpoint here (would redirect guests to login).
+  const units: Unit[] = rawProperty?.units ? (rawProperty.units as unknown[]).map(transformUnit) : [];
 
   const publishMutation = useMutation({
     mutationFn: (publish: boolean) =>
@@ -127,6 +135,12 @@ export default function PropertyDetail() {
   const isDraft = rawProperty.status === "draft";
   const isExpired = rawProperty.status === "expired";
 
+  // Determine back destination based on where the user actually came from.
+  // PropertyList passes state={{ from: "dashboard" }} on its Preview link.
+  const cameFromDashboard = (location.state as { from?: string } | null)?.from === "dashboard";
+  const backLink = (isOwner || cameFromDashboard) ? "/dashboard/properties" : "/";
+  const backText = (isOwner || cameFromDashboard) ? "My Properties" : "All Properties";
+
   const nextImage = () => setCurrentImage((i) => (i + 1) % property.images.length);
   const prevImage = () => setCurrentImage((i) => (i - 1 + property.images.length) % property.images.length);
 
@@ -135,8 +149,9 @@ export default function PropertyDetail() {
       <MarketplaceNav />
 
       <div className="container mx-auto px-4 py-6 flex-1">
-        <Link to="/dashboard/properties" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground font-body mb-4">
-          <ArrowLeft className="h-4 w-4" /> Back to My Properties
+        <Link to={backLink} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground font-body mb-4">
+          <ArrowLeft className="h-4 w-4" />
+          <span>{backText}</span>
         </Link>
 
         {isOwner && (
@@ -267,14 +282,110 @@ export default function PropertyDetail() {
             {property.amenities.length > 0 && (
               <div>
                 <h2 className="font-heading text-lg font-semibold text-foreground mb-3">Features & Amenities</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <div className="flex flex-wrap gap-x-6 gap-y-3">
                   {property.amenities.map((a) => (
                     <div key={a} className="flex items-center gap-2 text-sm font-body text-foreground">
                       <Check className="h-4 w-4 text-success shrink-0" />
-                      {a}
+                      <span>{a}</span>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Available Units */}
+            {units.length > 0 && (
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                  <h2 className="font-heading text-lg font-semibold text-foreground flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-muted-foreground" />
+                    Available Units
+                    <span className="text-sm font-normal text-muted-foreground font-body">
+                      ({units.filter((u) => u.status === "vacant").length} of {units.length} vacant)
+                    </span>
+                  </h2>
+                  <div className="flex items-center gap-1 text-xs font-body">
+                    {(["all", "vacant", "occupied"] as const).map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setUnitStatusFilter(f)}
+                        className={`px-2.5 py-1 rounded-md capitalize transition-colors ${
+                          unitStatusFilter === f
+                            ? "bg-secondary text-secondary-foreground"
+                            : "text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="divide-y divide-border rounded-lg border overflow-hidden">
+                  {units
+                    .filter((u) => unitStatusFilter === "all" || u.status === unitStatusFilter)
+                    .map((unit) => (
+                      <div key={unit.id} className="px-4 py-3 bg-card hover:bg-muted/30 transition-colors">
+                        {/* Top row: unit number + status badge */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-semibold font-body shrink-0">{unit.unitNumber}</span>
+                            <Badge variant="outline" className="font-body text-xs shrink-0">{unit.typeLabel}</Badge>
+                            {unit.floorNumber !== undefined && (
+                              <span className="text-xs text-muted-foreground font-body truncate">Floor {unit.floorNumber}</span>
+                            )}
+                          </div>
+                          <span
+                            className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+                              unit.status === "vacant"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {unit.status === "vacant" ? "Vacant" : "Occupied"}
+                          </span>
+                        </div>
+                        {/* Bottom row: price + action */}
+                        <div className="flex items-center justify-between gap-2 mt-2">
+                          <span className="font-heading font-bold text-secondary text-sm">
+                            KES {unit.price.toLocaleString()}
+                            <span className="text-xs font-normal text-muted-foreground font-body">/mo</span>
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {unit.status === "vacant" && !isOwner && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-secondary text-secondary hover:bg-secondary hover:text-secondary-foreground"
+                                onClick={() => {
+                                  setSelectedUnitId(unit.id);
+                                  setInquiryOpen(true);
+                                }}
+                              >
+                                <Send className="h-3 w-3 mr-1" /> Inquire
+                              </Button>
+                            )}
+                            {isOwner && (
+                              <Link
+                                to={`/dashboard/properties/${rawProperty._id}/units`}
+                                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-secondary transition-colors"
+                              >
+                                <Pencil className="h-3 w-3" /> Manage
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  {units.filter((u) => unitStatusFilter === "all" || u.status === unitStatusFilter).length === 0 && (
+                    <div className="text-center py-8 text-sm text-muted-foreground font-body">
+                      No {unitStatusFilter === "all" ? "" : unitStatusFilter} units found.
+                    </div>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground font-body flex items-center gap-1">
+                  <Layers className="h-3.5 w-3.5" />
+                  Prices may vary per unit. Contact the agent for full details.
+                </p>
               </div>
             )}
 
@@ -373,9 +484,9 @@ export default function PropertyDetail() {
                         <Pencil className="h-4 w-4" /> Edit Property
                       </button>
                     </Link>
-                    <Link to="/dashboard/properties" className="block">
+                    <Link to="/dashboard/properties" state={{ from: "dashboard" }} className="block">
                       <button className="w-full flex items-center justify-center gap-2 rounded-md border border-border py-2.5 text-sm font-body font-medium text-muted-foreground hover:bg-muted transition-colors">
-                        ← Back to My Properties
+                        ← My Properties
                       </button>
                     </Link>
                   </div>
@@ -493,16 +604,28 @@ export default function PropertyDetail() {
 
       <InquiryModal
         open={inquiryOpen}
-        onClose={() => setInquiryOpen(false)}
+        onClose={() => { setInquiryOpen(false); setSelectedUnitId(undefined); }}
         propertyId={rawProperty._id}
         propertyTitle={property.title}
         agentName={property.agent.name}
+        units={units.map((u) => ({
+          id: u.id,
+          label: `${u.unitNumber} · ${u.typeLabel} · KES ${u.price.toLocaleString()}`,
+          status: u.status,
+        }))}
+        preselectedUnitId={selectedUnitId}
       />
       <ViewingModal
         open={viewingOpen}
-        onClose={() => setViewingOpen(false)}
+        onClose={() => { setViewingOpen(false); setSelectedUnitId(undefined); }}
         propertyId={rawProperty._id}
         propertyTitle={property.title}
+        units={units.map((u) => ({
+          id: u.id,
+          label: `${u.unitNumber} · ${u.typeLabel} · KES ${u.price.toLocaleString()}`,
+          status: u.status,
+        }))}
+        preselectedUnitId={selectedUnitId}
       />
       
       <ShareModal 

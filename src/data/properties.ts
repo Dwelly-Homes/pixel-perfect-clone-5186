@@ -34,6 +34,43 @@ export interface Property {
   createdAt: string;
 }
 
+/** A single rentable unit within a property/building */
+export interface Unit {
+  id: string;
+  propertyId: string;
+  unitNumber: string;
+  floorNumber?: number;
+  type: string;       // backend key e.g. "1_bedroom"
+  typeLabel: string;  // display label e.g. "1 Bedroom"
+  price: number;
+  serviceCharge?: number;
+  status: "vacant" | "occupied";
+  images: string[];
+  notes?: string;
+  createdAt: string;
+}
+
+/** Property enriched with its units (used in detail and list views) */
+export interface PropertyWithUnits extends Property {
+  units: Unit[];
+  totalUnits: number;
+  availableUnits: number;
+  startingPrice: number;
+}
+
+export const UNIT_TYPE_OPTIONS = [
+  { value: "bedsitter", label: "Bedsitter" },
+  { value: "studio", label: "Studio" },
+  { value: "1_bedroom", label: "1 Bedroom" },
+  { value: "2_bedroom", label: "2 Bedroom" },
+  { value: "3_bedroom", label: "3 Bedroom" },
+  { value: "4_plus_bedroom", label: "4+ Bedroom" },
+  { value: "maisonette", label: "Maisonette" },
+  { value: "bungalow", label: "Bungalow" },
+  { value: "townhouse", label: "Townhouse" },
+  { value: "commercial", label: "Commercial" },
+] as const;
+
 
 
 export const PROPERTY_TYPES = [

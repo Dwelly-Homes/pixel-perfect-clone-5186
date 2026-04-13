@@ -1,8 +1,8 @@
-import { Heart, MapPin, BadgeCheck, Shield, BedDouble } from "lucide-react";
+import { Heart, MapPin, BadgeCheck, Shield, BedDouble, Building2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Property } from "@/data/properties";
+import type { Property, PropertyWithUnits } from "@/data/properties";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
@@ -10,16 +10,19 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 interface PropertyCardProps {
-  property: Property;
+  property: Property | PropertyWithUnits;
 }
 
 export function PropertyCard({ property }: PropertyCardProps) {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [favorited, setFavorited] = useState(false);
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
-  const formattedPrice = new Intl.NumberFormat("en-KE").format(property.price);
+  const multiUnit = "units" in property && property.totalUnits > 0;
+  const formattedPrice = new Intl.NumberFormat("en-KE").format(
+    multiUnit ? (property as PropertyWithUnits).startingPrice : property.price
+  );
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -96,15 +99,27 @@ export function PropertyCard({ property }: PropertyCardProps) {
         </div>
 
         <div className="font-heading text-lg font-bold text-secondary">
+          {multiUnit && <span className="text-xs font-normal text-muted-foreground font-body mr-1">from</span>}
           KES {formattedPrice} <span className="text-xs font-normal text-muted-foreground font-body">/ month</span>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="outline" className="text-xs font-body">{property.type}</Badge>
-          {property.bedrooms > 0 && (
-            <Badge variant="outline" className="text-xs font-body">
-              <BedDouble className="mr-1 h-3 w-3" /> {property.bedrooms} Bed{property.bedrooms > 1 ? "s" : ""}
-            </Badge>
+          {multiUnit ? (
+            <>
+              <Badge variant="outline" className="text-xs font-body">
+                <Building2 className="mr-1 h-3 w-3" />
+                {(property as PropertyWithUnits).availableUnits} of {(property as PropertyWithUnits).totalUnits} vacant
+              </Badge>
+            </>
+          ) : (
+            <>
+              <Badge variant="outline" className="text-xs font-body">{property.type}</Badge>
+              {property.bedrooms > 0 && (
+                <Badge variant="outline" className="text-xs font-body">
+                  <BedDouble className="mr-1 h-3 w-3" /> {property.bedrooms} Bed{property.bedrooms > 1 ? "s" : ""}
+                </Badge>
+              )}
+            </>
           )}
         </div>
 

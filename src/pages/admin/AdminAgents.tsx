@@ -41,6 +41,20 @@ export default function AdminAgents() {
     },
   });
 
+  const { data: activeSummary } = useQuery({
+    queryKey: ["adminAgentsCounts"],
+    queryFn: async () => {
+      const [activeRes, pendingRes] = await Promise.all([
+        api.get(`/tenants?accountType=estate_agent&status=active&limit=1`),
+        api.get(`/tenants?accountType=estate_agent&status=pending_verification&limit=1`),
+      ]);
+      return {
+        activeTotal: activeRes.data?.meta?.total ?? 0,
+        pendingTotal: pendingRes.data?.meta?.total ?? 0,
+      };
+    },
+  });
+
   const toggleStatusMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ id, status }: { id: string; status: string }) =>
@@ -63,7 +77,8 @@ export default function AdminAgents() {
     return a.businessName?.toLowerCase().includes(q) || a.contactEmail?.toLowerCase().includes(q);
   });
 
-  const activeCount = agents.filter((a) => a.status === "active").length;
+  const activeCount = activeSummary?.activeTotal ?? 0;
+  const pendingCount = activeSummary?.pendingTotal ?? 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -76,7 +91,7 @@ export default function AdminAgents() {
         {[
           { label: "Total Agencies", value: total },
           { label: "Active Agencies", value: activeCount },
-          { label: "Pending Review", value: agents.filter((a) => a.status === "pending_verification").length },
+          { label: "Pending Review", value: pendingCount },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="p-4">
